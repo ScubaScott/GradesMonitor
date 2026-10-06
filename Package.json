@@ -1,0 +1,13 @@
+{
+  "name": "canvas-student-dashboard",
+  "version": "1.0.0",
+  "description": "Local proxy and dashboard for Canvas student grades & missing assignments",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}

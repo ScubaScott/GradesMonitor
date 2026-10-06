@@ -1,0 +1,2632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Monitor student course grades and track missing assignments in real time using Canvas LMS API.">
+  <title>Canvas Student Grade & Missing Work Monitor</title>
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Shakopee High School Red, Black, and White Theme Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="container">
+    <!-- Top Navigation Header -->
+    <header class="dashboard-header">
+      <div class="brand-title">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary);">
+          <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+          <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+        </svg>
+        <span>Grade & Missing Work Monitor</span>
+        <span class="brand-badge">Shakopee Sabers &bull; Canvas</span>
+      </div>
+
+      <div class="header-actions">
+        <button id="printAllBtn" class="btn btn-secondary no-print" onclick="printAllReports()" title="Print report with 1 student per page or save to PDF">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 6 2 18 2 18 9"></polyline>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+            <rect x="6" y="14" width="12" height="8"></rect>
+          </svg>
+          Print / PDF Reports
+        </button>
+        <button id="toggleSettingsBtn" class="btn btn-secondary" onclick="toggleSettings()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          Settings
+        </button>
+        <button id="refreshBtn" class="btn btn-primary" onclick="loadDashboard()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+          Refresh Data
+        </button>
+      </div>
+    </header>
+
+    <!-- Configuration Settings Drawer -->
+    <section id="settingsPanel" class="settings-panel collapsed">
+      <div class="settings-title">
+        <span>Canvas Connection Configuration</span>
+        <span style="font-size:12px; color:var(--text-muted); font-weight:normal;">Settings are saved locally in your browser</span>
+      </div>
+
+      <div class="settings-grid">
+        <div class="form-group">
+          <label class="form-label" for="canvasUrl">Canvas Base URL</label>
+          <input type="url" id="canvasUrl" class="form-input" placeholder="e.g. https://shakopee.instructure.com/" value="https://shakopee.instructure.com/" autocomplete="off">
+          <span class="helper-text">Enter your school or district Canvas URL</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="apiToken">Canvas API Access Token</label>
+          <input type="password" id="apiToken" class="form-input" placeholder="Paste Canvas access token here" autocomplete="off">
+          <span class="helper-text">Generated in Canvas: Account &rarr; Settings &rarr; New Access Token</span>
+        </div>
+
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-secondary" onclick="saveCredentials()" title="Save credentials to browser storage">Save</button>
+          <button class="btn btn-primary" onclick="loadDashboard()">Connect</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Real-time Status Indicator -->
+    <div class="status-bar">
+      <div class="status-content">
+        <div id="statusPulse" class="status-pulse"></div>
+        <span id="statusText">Ready to connect. Please configure your Canvas URL and Token above.</span>
+      </div>
+      <div id="lastSyncText" style="color:var(--text-faint); font-size:12px;"></div>
+    </div>
+
+    <!-- Aggregate Metric Counters -->
+    <section class="metrics-bar" id="metricsBar">
+      <div class="metric-card">
+        <span class="metric-label">Observed Students</span>
+        <span class="metric-value" id="metricStudents">0</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Displayed Classes</span>
+        <span class="metric-value" id="metricClasses">0</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Total Missing Assignments</span>
+        <span class="metric-value" id="metricMissing">0</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Turned In Work</span>
+        <span class="metric-value highlight-good" id="metricResolved">0</span>
+      </div>
+    </section>
+
+    <!-- Search and View Filter Controls -->
+    <div class="filter-bar-sentinel" id="filterBarSentinel"></div>
+    <section class="filter-bar" id="filterBar">
+      <div class="filter-controls-left">
+        <!-- Search filter input -->
+        <div class="search-input-wrapper">
+          <span class="search-icon">&#128269;</span>
+          <input type="text" id="courseSearch" class="search-input" placeholder="Filter class or student..." oninput="filterDashboard()">
+        </div>
+
+        <!-- Term / Semester dropdown filter -->
+        <div class="filter-group">
+          <label class="form-label-inline" for="termFilter">Semester/Year:</label>
+          <select id="termFilter" class="form-select" onchange="filterDashboard()">
+            <option value="current">Current Term (2026-2027 Q1)</option>
+            <option value="all">All Semesters / Years</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="filter-toggles">
+        <!-- Active classes only filter (enabled by default) -->
+        <label class="checkbox-label" title="Show only currently active/published courses">
+          <input type="checkbox" id="activeOnlyToggle" checked onchange="filterDashboard()">
+          <span>Active classes only</span>
+        </label>
+
+        <!-- Missing assignments only filter -->
+        <label class="checkbox-label" title="Show only courses that have missing assignments">
+          <input type="checkbox" id="missingOnlyToggle" onchange="filterDashboard()">
+          <span>Only with missing work</span>
+        </label>
+
+        <!-- Turned in work filter toggle -->
+        <label class="checkbox-label" title="Show assignments that have been turned in">
+          <input type="checkbox" id="showResolvedToggle" checked onchange="filterDashboard()">
+          <span>Show turned-in work</span>
+        </label>
+      </div>
+    </section>
+
+    <!-- Missing Work Urgency Legend -->
+    <div class="urgency-legend-bar" id="urgencyLegendBar" style="display:none;">
+      <span class="legend-title">Missing Work Legend:</span>
+      <div class="legend-items">
+        <span class="legend-chip chip-today"><span class="chip-dot"></span>Today</span>
+        <span class="legend-chip chip-week"><span class="chip-dot"></span>This Week</span>
+        <span class="legend-chip chip-older"><span class="chip-dot"></span>Last Week</span>
+        <span class="legend-chip chip-pulse"><span class="chip-dot"></span>&gt; 2 Weeks (Pulse)</span>
+      </div>
+    </div>
+
+    <!-- Main Dynamic Output Container -->
+    <main id="output">
+      <!-- Default instructional placeholder card -->
+      <div style="background:var(--bg-secondary); border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:40px; text-align:center;">
+        <h2 style="font-size:18px; margin-bottom:10px; color:var(--text-main);">Welcome to Grade & Missing Work Monitor</h2>
+        <p style="color:var(--text-muted); font-size:14px; max-width:540px; margin:0 auto 20px;">
+          Connect your Canvas parent observer account to view all linked students, live course grades, and past-due missing assignments in one unified dashboard.
+        </p>
+        <button class="btn btn-primary" onclick="loadDashboard()">Load Student Data</button>
+      </div>
+    </main>
+  </div>
+
+  <!-- Footer displaying required version constant -->
+  <footer class="dashboard-footer">
+    <span>Canvas Grade Monitor v<span id="versionText">2.8</span> &bull; Synchronized via Local Proxy</span>
+  </footer>
+
+  <script>
+    // Version constant for frontend display and verification
+    const VERSION = "2.8";
+    document.getElementById('versionText').innerText = VERSION;
+
+    // Cache of dashboard data for fast client-side filtering
+    let cachedStudentsData = [];
+
+    // Set of all distinct terms/semesters discovered across loaded courses
+    let discoveredTerms = new Set();
+
+    // Determine whether an assignment accepts digital submission via Canvas
+    function canBeSubmittedOnline(submissionTypes, hasSubmission = false) {
+      if (hasSubmission) return true;
+      if (!Array.isArray(submissionTypes) || submissionTypes.length === 0) {
+        return false;
+      }
+      const offlineTypes = new Set(['none', 'on_paper', 'not_graded', 'wiki_page']);
+      return submissionTypes.some(t => !offlineTypes.has(t));
+    }
+
+    // Initialize application settings on DOM ready
+    window.addEventListener('DOMContentLoaded', async () => {
+      // Query server for default base URL and token from secret/secrets.txt
+      let defaultBaseUrl = 'https://shakopee.instructure.com/';
+      let defaultToken = '';
+
+      try {
+        const configRes = await fetch('/api/default-config');
+        if (configRes.ok) {
+          const configData = await configRes.json();
+          if (configData.baseUrl) defaultBaseUrl = configData.baseUrl;
+          if (configData.token) defaultToken = configData.token;
+        }
+      } catch (e) {
+        // Optional default config fallback
+      }
+
+      // Check saved credentials in localStorage or fall back to defaults
+      const savedUrl = localStorage.getItem('canvas_base_url');
+      const savedToken = localStorage.getItem('canvas_api_token');
+
+      const urlInput = document.getElementById('canvasUrl');
+      const tokenInput = document.getElementById('apiToken');
+
+      urlInput.value = savedUrl || defaultBaseUrl;
+      tokenInput.value = savedToken || defaultToken;
+
+      // Automatically trigger dashboard load if credentials are populated
+      if (urlInput.value && tokenInput.value) {
+        loadDashboard();
+      } else {
+        settingsAutoOpened = true;
+        setSettingsOpen(true);
+      }
+
+      // Pin shadow on filter bar when it is stuck to the top
+      const sentinel = document.getElementById('filterBarSentinel');
+      if (sentinel && 'IntersectionObserver' in window) {
+        new IntersectionObserver(([e]) => {
+          document.getElementById('filterBar').classList.toggle('pinned', !e.isIntersecting);
+        }, { threshold: 0 }).observe(sentinel);
+      }
+    });
+
+    // Determine missing assignment urgency category: Today (green), This Week (yellow), Last Week (red), and >2 Weeks (red + pulse)
+    function getMissingUrgency(rawDueAt) {
+      // Overdue fallback for assignments with no specified or unparseable due date
+      if (!rawDueAt) {
+        return {
+          urgency: 'critical',
+          itemClass: 'missing-item-older missing-item-pulse',
+          tagHtml: '<span class="pulse-indicator"></span>&gt; 2 Weeks'
+        };
+      }
+
+      const dueDate = new Date(rawDueAt);
+      if (isNaN(dueDate.getTime())) {
+        return {
+          urgency: 'critical',
+          itemClass: 'missing-item-older missing-item-pulse',
+          tagHtml: '<span class="pulse-indicator"></span>&gt; 2 Weeks'
+        };
+      }
+
+      const now = new Date();
+      // Normalize dates to local midnight for exact calendar day comparison
+      const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const dueMidnight = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
+
+      // Determine start of current calendar week (Monday 00:00:00 local time)
+      // JavaScript getDay(): Sunday = 0, Monday = 1, Tuesday = 2, ..., Saturday = 6
+      const currentDay = todayMidnight.getDay();
+      const daysSinceMonday = (currentDay + 6) % 7;
+      const startOfThisWeek = new Date(todayMidnight);
+      startOfThisWeek.setDate(todayMidnight.getDate() - daysSinceMonday);
+
+      // Determine start of previous calendar week (Previous Monday 00:00:00 local time)
+      const startOfLastWeek = new Date(startOfThisWeek);
+      startOfLastWeek.setDate(startOfThisWeek.getDate() - 7);
+
+      // Due today or due in future: Green
+      if (dueMidnight.getTime() >= todayMidnight.getTime()) {
+        return {
+          urgency: 'today',
+          itemClass: 'missing-item-today',
+          tagHtml: 'Today'
+        };
+      }
+
+      // Due this calendar week (from Monday up through yesterday): Yellow
+      if (dueMidnight.getTime() >= startOfThisWeek.getTime()) {
+        return {
+          urgency: 'week',
+          itemClass: 'missing-item-week',
+          tagHtml: 'This Week'
+        };
+      }
+
+      // Due prior calendar week (Monday through Sunday of last week): Red
+      if (dueMidnight.getTime() >= startOfLastWeek.getTime()) {
+        return {
+          urgency: 'lastWeek',
+          itemClass: 'missing-item-older',
+          tagHtml: 'Last Week'
+        };
+      }
+
+      // Overdue by more than last week (due before last week Monday): Red + Pulse
+      return {
+        urgency: 'critical',
+        itemClass: 'missing-item-older missing-item-pulse',
+        tagHtml: '<span class="pulse-indicator"></span>&gt; 2 Weeks'
+      };
+    }
+
+    // Storage key for persistent tracking of late/missing assignment history
+    const OVERDUE_HISTORY_KEY = 'canvas_overdue_history_v1';
+
+    // Retrieve parsed late/missing assignment history map from localStorage
+    function getOverdueHistory() {
+      try {
+        const raw = localStorage.getItem(OVERDUE_HISTORY_KEY);
+        return raw ? JSON.parse(raw) : {};
+      } catch (e) {
+        console.warn('Failed to parse overdue history from storage:', e.message);
+        return {};
+      }
+    }
+
+    // Persist updated late/missing assignment history map into localStorage
+    function saveOverdueHistory(history) {
+      try {
+        localStorage.setItem(OVERDUE_HISTORY_KEY, JSON.stringify(history));
+      } catch (e) {
+        console.warn('Failed to save overdue history to storage:', e.message);
+      }
+    }
+
+    // Format ISO date string into readable short date and time for display
+    function formatDateTime(rawDate) {
+      if (!rawDate) return '';
+      const d = new Date(rawDate);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    // Calculate human-friendly duration an item was submitted past its due date
+    function calculateDaysLate(rawDueAt, rawSubmittedAt) {
+      if (!rawDueAt || !rawSubmittedAt) return '';
+      const dueDate = new Date(rawDueAt);
+      const subDate = new Date(rawSubmittedAt);
+      if (isNaN(dueDate.getTime()) || isNaN(subDate.getTime())) return '';
+
+      const diffMs = subDate.getTime() - dueDate.getTime();
+      if (diffMs <= 0) return '';
+
+      const diffHours = diffMs / (1000 * 60 * 60);
+      if (diffHours < 24) {
+        const hours = Math.max(1, Math.round(diffHours));
+        return `${hours} hr${hours !== 1 ? 's' : ''} late`;
+      }
+
+      const diffDays = Math.round(diffHours / 24);
+      return `${diffDays} day${diffDays !== 1 ? 's' : ''} late`;
+    }
+
+    // Evaluate assignment lateness severity and return styling classes and text description
+    function getLatenessInfo(rawDueAt, rawSubmittedAt, isLateFlag) {
+      // Assignments with no explicit due date are treated as on-time
+      if (!rawDueAt) {
+        return {
+          status: 'ontime',
+          cssClass: 'resolved-item-ontime',
+          tagClass: 'resolved-tag-ontime',
+          label: 'On Time',
+          daysLateText: 'On time'
+        };
+      }
+
+      const dueDate = new Date(rawDueAt);
+      const subDate = rawSubmittedAt ? new Date(rawSubmittedAt) : null;
+
+      // When valid submission date is present
+      if (subDate && !isNaN(subDate.getTime()) && !isNaN(dueDate.getTime())) {
+        const diffMs = subDate.getTime() - dueDate.getTime();
+        if (diffMs <= 0 && !isLateFlag) {
+          return {
+            status: 'ontime',
+            cssClass: 'resolved-item-ontime',
+            tagClass: 'resolved-tag-ontime',
+            label: 'On Time',
+            daysLateText: 'On time'
+          };
+        }
+
+        const diffHours = Math.max(1, diffMs / (1000 * 60 * 60));
+        const diffDays = Math.round(diffHours / 24);
+        const durationText = diffHours < 24
+          ? `${Math.round(diffHours)} hr${Math.round(diffHours) !== 1 ? 's' : ''} late`
+          : `${diffDays} day${diffDays !== 1 ? 's' : ''} late`;
+
+        if (diffHours <= 48 || diffDays <= 2) {
+          return {
+            status: 'late-mild',
+            cssClass: 'resolved-item-late-mild',
+            tagClass: 'resolved-tag-late-mild',
+            label: durationText,
+            daysLateText: durationText
+          };
+        } else if (diffDays <= 6) {
+          return {
+            status: 'late-moderate',
+            cssClass: 'resolved-item-late-moderate',
+            tagClass: 'resolved-tag-late-moderate',
+            label: durationText,
+            daysLateText: durationText
+          };
+        } else {
+          return {
+            status: 'late-severe',
+            cssClass: 'resolved-item-late-severe',
+            tagClass: 'resolved-tag-late-severe',
+            label: durationText,
+            daysLateText: durationText
+          };
+        }
+      }
+
+      // Fallback if submission timestamp is omitted but marked late
+      if (isLateFlag) {
+        return {
+          status: 'late-mild',
+          cssClass: 'resolved-item-late-mild',
+          tagClass: 'resolved-tag-late-mild',
+          label: 'Late',
+          daysLateText: 'Late'
+        };
+      }
+
+      return {
+        status: 'ontime',
+        cssClass: 'resolved-item-ontime',
+        tagClass: 'resolved-tag-ontime',
+        label: 'On Time',
+        daysLateText: 'On time'
+      };
+    }
+
+    // Toggle visibility of additional turned-in items for compact card display
+    function toggleResolvedExpand(containerId, btnId) {
+      const container = document.getElementById(containerId);
+      const btn = document.getElementById(btnId);
+      if (!container || !btn) return;
+
+      const isHidden = container.style.display === 'none' || container.style.display === '';
+      if (isHidden) {
+        container.style.display = 'flex';
+        btn.innerText = 'Show fewer turned-in items';
+      } else {
+        container.style.display = 'none';
+        const hiddenCount = container.children.length;
+        btn.innerText = `Show ${hiddenCount} more turned-in items...`;
+      }
+    }
+
+    // Clean and normalize Canvas term name for friendly display (e.g. "2026-2027 Q1")
+    function formatTermName(rawTermName) {
+      if (!rawTermName) return '';
+      let t = rawTermName.replace(/(\d{4})\/(\d{4})/g, (m, y1, y2) => `${y1}-${y2}`);
+      if (/Q1\s*-\s*Q4/i.test(t)) {
+        const ym = t.match(/\d{4}[-\/]\d{4}/);
+        const yr = ym ? ym[0].replace('/', '-') : '2026-2027';
+        return `${yr} Full Year (Q1-Q4)`;
+      }
+      const qm = t.match(/(\d{4})[-\/](\d{4}).*?(Q[1-4]|Semester\s*[1-2]|Trimester\s*[1-3])/i);
+      if (qm) {
+        return `${qm[1]}-${qm[2]} ${qm[3].toUpperCase()}`;
+      }
+      t = t.replace(/\s*-\s*High School\s*/gi, ' ').replace(/\s+/g, ' ').trim();
+      return t;
+    }
+
+    // Determine whether a course represents the active current academic term
+    function isCurrentTerm(course) {
+      if (!course) return false;
+      const termName = course.term || course.rawTerm || '';
+      // Check if term matches current quarter or year-long active enrollment
+      if (/2026.*2027.*(Q1|Full Year)/i.test(termName) || /Q1/i.test(termName)) {
+        return true;
+      }
+      // Check if current date falls within term start and end bounds
+      if (course.termStartAt && course.termEndAt) {
+        const now = new Date();
+        const start = new Date(course.termStartAt);
+        const end = new Date(course.termEndAt);
+        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+          return now >= start && now <= end;
+        }
+      }
+      return course.isActive === true;
+    }
+
+    // Toggle configuration panel visibility
+    let settingsAutoOpened = false;
+    function setSettingsOpen(open) {
+      document.getElementById('settingsPanel').classList.toggle('collapsed', !open);
+      document.getElementById('toggleSettingsBtn').classList.toggle('active', open);
+    }
+    function toggleSettings() {
+      const open = document.getElementById('settingsPanel').classList.contains('collapsed');
+      settingsAutoOpened = false;
+      setSettingsOpen(open);
+    }
+
+    // Persist credentials in browser localStorage
+    function saveCredentials() {
+      const baseUrl = document.getElementById('canvasUrl').value.trim();
+      const token = document.getElementById('apiToken').value.trim();
+
+      if (baseUrl) localStorage.setItem('canvas_base_url', baseUrl);
+      if (token) localStorage.setItem('canvas_api_token', token);
+
+      updateStatus('Settings saved to browser.', 'ready');
+    }
+
+    // Update real-time status banner
+    function updateStatus(message, state = 'ready') {
+      const statusText = document.getElementById('statusText');
+      const pulse = document.getElementById('statusPulse');
+
+      statusText.innerText = message;
+      pulse.className = 'status-pulse';
+
+      if (state === 'loading') {
+        pulse.classList.add('loading');
+      } else if (state === 'error') {
+        pulse.classList.add('error');
+        // Connection/config problem: surface the settings panel
+        if (document.getElementById('settingsPanel').classList.contains('collapsed')) {
+          settingsAutoOpened = true;
+          setSettingsOpen(true);
+        }
+      }
+    }
+
+    // Relay Canvas API requests through local express proxy
+    async function apiCall(endpoint, baseUrl, token) {
+      const res = await fetch('/api/canvas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ baseUrl, token, endpoint })
+      });
+
+      if (!res.ok) {
+        let errMessage = `Error ${res.status}`;
+        try {
+          const err = await res.json();
+          errMessage = err.details || err.error || errMessage;
+        } catch (e) {
+          // If response is not JSON
+        }
+        throw new Error(errMessage);
+      }
+
+      return await res.json();
+    }
+
+    // Extract next-page URL from standard RFC 5988 Canvas Link header
+    function getNextPageUrl(linkHeader) {
+      if (!linkHeader) return null;
+      const match = linkHeader.match(/<([^>]+)>;\s*rel="next"/i);
+      return match ? match[1] : null;
+    }
+
+    // Retrieve all paginated records by following Canvas API pagination link headers
+    async function apiCallAllPages(endpoint, baseUrl, token, maxPages = 20) {
+      let combinedItems = [];
+      let currentEndpoint = endpoint;
+      let pagesCount = 0;
+
+      while (currentEndpoint && pagesCount < maxPages) {
+        const res = await fetch('/api/canvas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ baseUrl, token, endpoint: currentEndpoint })
+        });
+
+        if (!res.ok) {
+          let errMessage = `Error ${res.status}`;
+          try {
+            const err = await res.json();
+            errMessage = err.details || err.error || errMessage;
+          } catch (e) {
+            // Non-JSON error payload
+          }
+          throw new Error(errMessage);
+        }
+
+        const linkHeader = res.headers.get('x-canvas-link') || res.headers.get('link');
+        const data = await res.json();
+
+        if (Array.isArray(data)) {
+          combinedItems.push(...data);
+        } else {
+          return data;
+        }
+
+        pagesCount++;
+        currentEndpoint = getNextPageUrl(linkHeader);
+      }
+
+      return combinedItems;
+    }
+
+    // Determine CSS class and formatted letter for grade badge
+    function getGradeDetails(letter, score) {
+      if (!letter && (score === null || score === undefined)) {
+        return { cls: 'grade-none', letter: 'N/A', scoreText: 'No Grade' };
+      }
+
+      const letterUpper = (letter || '').trim().toUpperCase();
+      let cls = 'grade-none';
+
+      if (letterUpper.startsWith('A')) {
+        cls = 'grade-a';
+      } else if (letterUpper.startsWith('B')) {
+        cls = 'grade-b';
+      } else if (letterUpper.startsWith('C')) {
+        cls = 'grade-c';
+      } else if (letterUpper.startsWith('D') || letterUpper.startsWith('F')) {
+        cls = 'grade-df';
+      } else if (score !== null && score !== undefined) {
+        if (score >= 90) cls = 'grade-a';
+        else if (score >= 80) cls = 'grade-b';
+        else if (score >= 70) cls = 'grade-c';
+        else cls = 'grade-df';
+      }
+
+      const displayLetter = letterUpper || (score !== null && score !== undefined ? `${score}%` : 'N/A');
+      const displayScore = score !== null && score !== undefined ? `${score}%` : '';
+
+      return { cls, letter: displayLetter, scoreText: displayScore };
+    }
+
+    // Determine if a course is currently active based on state flags and term dates
+    function isCourseActive(course) {
+      // If course is explicitly marked as concluded
+      if (course.concluded === true) {
+        return false;
+      }
+
+      // Check course workflow state
+      if (course.workflowState && (course.workflowState === 'completed' || course.workflowState === 'concluded' || course.workflowState === 'deleted')) {
+        return false;
+      }
+
+      // Check enrollment state if recorded
+      if (course.enrollmentState && (course.enrollmentState === 'completed' || course.enrollmentState === 'inactive')) {
+        return false;
+      }
+
+      // Check term end date if present
+      if (course.termEndAt) {
+        const endDate = new Date(course.termEndAt);
+        if (!isNaN(endDate.getTime()) && endDate < new Date()) {
+          // If the term has explicitly ended in the past, treat as concluded
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    // Extract turned-in assignments, calculate lateness severity, and attach to course object
+    function attachSubmissionsToCourse(student, course, rawSubs, overdueHistory) {
+      course.allSubmissions = rawSubs || [];
+      const resolvedItems = [];
+
+      for (const s of course.allSubmissions) {
+        if (!s || !s.assignment_id) continue;
+        const historyKey = `${student.id}_${course.id}_${s.assignment_id}`;
+        const rawDueAt = s.assignment ? s.assignment.due_at : null;
+        const rawSubAt = s.submitted_at;
+        const isLateByDate = Boolean(rawDueAt && rawSubAt && new Date(rawSubAt) > new Date(rawDueAt));
+        const wasTrackedMissing = Boolean(overdueHistory[historyKey] && overdueHistory[historyKey].status === 'missing');
+
+        // Determine if submission is marked as turned in or graded
+        const isTurnedIn = Boolean(rawSubAt) ||
+          s.workflow_state === 'submitted' ||
+          (s.workflow_state === 'graded' && !s.missing && s.late_policy_status !== 'missing') ||
+          (s.score !== null && s.score !== undefined && !s.missing && s.late_policy_status !== 'missing');
+
+        if (isTurnedIn) {
+          const isLate = s.late === true || isLateByDate || wasTrackedMissing;
+
+          if (wasTrackedMissing && overdueHistory[historyKey]) {
+            overdueHistory[historyKey].status = 'resolved';
+            overdueHistory[historyKey].resolvedAt = rawSubAt || new Date().toISOString();
+          }
+
+          const lateness = getLatenessInfo(rawDueAt, rawSubAt, isLate);
+
+          resolvedItems.push({
+            id: s.assignment_id,
+            name: (s.assignment && s.assignment.name) ? s.assignment.name : `Assignment ${s.assignment_id}`,
+            dueAt: rawDueAt ? new Date(rawDueAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'No due date',
+            rawDueAt: rawDueAt,
+            submittedAt: rawSubAt ? formatDateTime(rawSubAt) : (s.workflow_state === 'graded' ? 'Graded' : 'Turned In'),
+            rawSubmittedAt: rawSubAt,
+            daysLateText: lateness.daysLateText,
+            isLate: isLate,
+            lateness: lateness,
+            pointsPossible: s.assignment ? s.assignment.points_possible : null,
+            score: s.score ?? null,
+            grade: s.grade ?? null,
+            workflowState: s.workflow_state
+          });
+        }
+      }
+
+      // Sort turned-in items descending by submission timestamp so newest completions are first
+      resolvedItems.sort((a, b) => {
+        const timeA = a.rawSubmittedAt ? new Date(a.rawSubmittedAt).getTime() : (a.rawDueAt ? new Date(a.rawDueAt).getTime() : 0);
+        const timeB = b.rawSubmittedAt ? new Date(b.rawSubmittedAt).getTime() : (b.rawDueAt ? new Date(b.rawDueAt).getTime() : 0);
+        return timeB - timeA;
+      });
+
+      course.resolvedLateWork = resolvedItems;
+    }
+
+    // Primary dashboard loading routine
+    async function loadDashboard() {
+      const baseUrlInput = document.getElementById('canvasUrl');
+      const tokenInput = document.getElementById('apiToken');
+      const output = document.getElementById('output');
+      const metricsBar = document.getElementById('metricsBar');
+      const filterBar = document.getElementById('filterBar');
+
+      const baseUrl = baseUrlInput.value.trim().replace(/\/+$/, '');
+      const token = tokenInput.value.trim();
+
+      if (!baseUrl) {
+        updateStatus('Please enter your Canvas Base URL (e.g. https://yourschool.instructure.com).', 'error');
+        baseUrlInput.focus();
+        return;
+      }
+
+      if (!token) {
+        updateStatus('Please provide a Canvas API access token.', 'error');
+        tokenInput.focus();
+        return;
+      }
+
+      // Save credentials for subsequent sessions
+      localStorage.setItem('canvas_base_url', baseUrl);
+      localStorage.setItem('canvas_api_token', token);
+
+      // Render loading skeleton
+      updateStatus('Contacting Canvas LMS...', 'loading');
+      output.innerHTML = `
+        <div class="course-grid">
+          <div class="skeleton-card"></div>
+          <div class="skeleton-card"></div>
+          <div class="skeleton-card"></div>
+        </div>
+      `;
+
+      try {
+        // Step 1: Fetch observed students (observees)
+        updateStatus('Locating observed students...', 'loading');
+        let students = [];
+        try {
+          students = await apiCall('/api/v1/users/self/observees?per_page=50', baseUrl, token);
+        } catch (err) {
+          throw new Error(`Failed to list observed students: ${err.message}`);
+        }
+
+        // If no observees found, check if current token belongs directly to a student
+        if (!students || students.length === 0) {
+          try {
+            const selfUser = await apiCall('/api/v1/users/self', baseUrl, token);
+            if (selfUser && selfUser.id) {
+              students = [selfUser];
+            }
+          } catch (e) {
+            // Non-critical check
+          }
+        }
+
+        if (!students || students.length === 0) {
+          output.innerHTML = `
+            <div style="background:var(--bg-secondary); border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:30px; text-align:center;">
+              <h3 style="color:var(--text-main); margin-bottom:8px;">No Observed Students Found</h3>
+              <p style="color:var(--text-muted); font-size:14px;">This Canvas account does not have any linked student observer pairings.</p>
+            </div>
+          `;
+          updateStatus('No observed students linked to this account.', 'error');
+          return;
+        }
+
+        updateStatus(`Found ${students.length} student(s). Fetching enrollments and courses...`, 'loading');
+
+        // Step 2: Fetch observer's own enrollments as a reliable grade and course source
+        let observerEnrollments = [];
+        try {
+          observerEnrollments = await apiCall('/api/v1/users/self/enrollments?include[]=course&include[]=current_grades&include[]=term&per_page=100', baseUrl, token);
+        } catch (e) {
+          console.warn('Observer self-enrollments fetch skipped:', e.message);
+        }
+
+        cachedStudentsData = [];
+        discoveredTerms = new Set();
+
+        // Step 3: Iterate through students and fetch course list + grades + missing work
+        for (const student of students) {
+          updateStatus(`Loading courses & missing work for ${student.name}...`, 'loading');
+
+          const courseMap = new Map();
+
+          // Check if active-only toggle is set to optimize query speed and filter out non-current classes
+          const activeOnly = document.getElementById('activeOnlyToggle') ? document.getElementById('activeOnlyToggle').checked : true;
+          const enrollmentParam = activeOnly ? '&enrollment_state=active' : '';
+
+          // Strategy A: Query student courses directly with total_scores and term included
+          try {
+            const studentCourses = await apiCall(
+              `/api/v1/users/${student.id}/courses?include[]=total_scores&include[]=current_grading_period_scores&include[]=term${enrollmentParam}&per_page=100`,
+              baseUrl,
+              token
+            );
+
+            if (Array.isArray(studentCourses)) {
+              for (const course of studentCourses) {
+                // Strictly exclude nameless ghost stubs or restricted entries
+                if (!course || !course.id || !course.name || !course.name.trim()) continue;
+
+                // Extract grade from course enrollment sub-array if available
+                let currentGrade = null;
+                let currentScore = null;
+                let enrollmentState = null;
+
+                if (Array.isArray(course.enrollments)) {
+                  const studentEnr = course.enrollments.find(e => e.user_id === student.id || e.type === 'student' || e.type === 'StudentEnrollment') || course.enrollments[0];
+                  if (studentEnr) {
+                    currentGrade = studentEnr.computed_current_grade || studentEnr.current_grade;
+                    currentScore = studentEnr.computed_current_score ?? studentEnr.current_score;
+                    enrollmentState = studentEnr.enrollment_state;
+                  }
+                }
+
+                const rawTermName = (course.term && course.term.name) ? course.term.name.trim() : '';
+                const cleanTerm = formatTermName(rawTermName) || 'Current Term';
+                const termStartAt = course.term ? course.term.start_at : null;
+                const termEndAt = course.term ? course.term.end_at : null;
+                if (cleanTerm && cleanTerm !== 'Current Term') {
+                  discoveredTerms.add(cleanTerm);
+                }
+
+                courseMap.set(course.id, {
+                  id: course.id,
+                  name: course.name.trim(),
+                  courseCode: course.course_code || '',
+                  grade: currentGrade,
+                  score: currentScore,
+                  term: cleanTerm,
+                  rawTerm: rawTermName,
+                  termStartAt: termStartAt,
+                  termEndAt: termEndAt,
+                  workflowState: course.workflow_state,
+                  enrollmentState: enrollmentState,
+                  concluded: course.concluded || false
+                });
+              }
+            }
+          } catch (err) {
+            console.warn(`Direct course query for student ${student.id} note:`, err.message);
+          }
+
+          // Strategy B: Cross-reference with Observer enrollments linked by associated_user_id
+          if (Array.isArray(observerEnrollments)) {
+            for (const enr of observerEnrollments) {
+              if (enr.associated_user_id === student.id && enr.course_id) {
+                const existing = courseMap.get(enr.course_id);
+                if (existing) {
+                  const enrGrades = enr.grades || {};
+                  if (existing.grade === null && enrGrades.current_grade) existing.grade = enrGrades.current_grade;
+                  if (existing.score === null && enrGrades.current_score !== undefined) existing.score = enrGrades.current_score;
+                  if (enr.enrollment_state) existing.enrollmentState = enr.enrollment_state;
+                } else if (enr.course && enr.course.name && enr.course.name.trim()) {
+                  // Only add new course if it has an authentic course name
+                  const rawTermName = (enr.course.term && enr.course.term.name) ? enr.course.term.name.trim() : '';
+                  const cleanTerm = formatTermName(rawTermName) || 'Current Term';
+                  if (cleanTerm && cleanTerm !== 'Current Term') discoveredTerms.add(cleanTerm);
+
+                  const enrGrades = enr.grades || {};
+                  courseMap.set(enr.course_id, {
+                    id: enr.course_id,
+                    name: enr.course.name.trim(),
+                    courseCode: enr.course.course_code || '',
+                    grade: enrGrades.current_grade || null,
+                    score: enrGrades.current_score ?? null,
+                    term: cleanTerm,
+                    rawTerm: rawTermName,
+                    termStartAt: enr.course.term ? enr.course.term.start_at : null,
+                    termEndAt: enr.course.term ? enr.course.term.end_at : null,
+                    workflowState: enr.course.workflow_state || 'available',
+                    enrollmentState: enr.enrollment_state || 'active',
+                    concluded: false
+                  });
+                }
+              }
+            }
+          }
+
+          // Strategy C: Query student enrollments endpoint if still empty
+          if (courseMap.size === 0) {
+            try {
+              const directEnrollments = await apiCall(
+                `/api/v1/users/${student.id}/enrollments?include[]=course&include[]=current_grades&include[]=term&per_page=100`,
+                baseUrl,
+                token
+              );
+
+              if (Array.isArray(directEnrollments)) {
+                for (const enr of directEnrollments) {
+                  if (!enr || !enr.course_id || !enr.course || !enr.course.name || !enr.course.name.trim()) continue;
+                  const enrGrades = enr.grades || {};
+                  const rawTermName = (enr.course.term && enr.course.term.name) ? enr.course.term.name.trim() : '';
+                  const cleanTerm = formatTermName(rawTermName) || 'Current Term';
+                  if (cleanTerm && cleanTerm !== 'Current Term') discoveredTerms.add(cleanTerm);
+
+                  courseMap.set(enr.course_id, {
+                    id: enr.course_id,
+                    name: enr.course.name.trim(),
+                    courseCode: enr.course.course_code || '',
+                    grade: enrGrades.current_grade || null,
+                    score: enrGrades.current_score ?? null,
+                    term: cleanTerm,
+                    rawTerm: rawTermName,
+                    termStartAt: enr.course.term ? enr.course.term.start_at : null,
+                    termEndAt: enr.course.term ? enr.course.term.end_at : null,
+                    workflowState: 'available',
+                    enrollmentState: enr.enrollment_state || 'active',
+                    concluded: false
+                  });
+                }
+              }
+            } catch (err) {
+              console.warn(`Enrollment fallback note for student ${student.id}:`, err.message);
+            }
+          }
+
+          const courses = Array.from(courseMap.values());
+
+          // Calculate activity status and current term status for every course
+          for (const course of courses) {
+            course.isActive = isCourseActive(course);
+            course.isCurrentTerm = isCurrentTerm(course);
+          }
+
+          // Prioritize current active courses and selected semester courses for network calls
+          const selectedTerm = document.getElementById('termFilter') ? document.getElementById('termFilter').value || 'current' : 'current';
+
+          const targetCourses = courses.filter(course => {
+            if (activeOnly && !course.isActive) return false;
+            if (selectedTerm === 'current') return isCurrentTerm(course) || course.isActive;
+            if (selectedTerm === 'all') return true;
+            return course.term === selectedTerm || course.rawTerm === selectedTerm;
+          });
+          const coursesForSubmissions = targetCourses.length > 0 ? targetCourses : (courses.filter(c => c.isActive).length > 0 ? courses.filter(c => c.isActive) : courses);
+          const targetCourseIds = coursesForSubmissions.map(c => c.id);
+
+          // Step 4: Fetch missing work using Canvas missing_submissions observer parameters
+          const missingByCourse = {};
+          if (targetCourseIds.length > 0) {
+            try {
+              // Observers require observed_user_id and course_ids[] array
+              const courseQueryStr = targetCourseIds.map(id => `course_ids[]=${encodeURIComponent(id)}`).join('&');
+              const missingEndpoint = `/api/v1/users/${student.id}/missing_submissions?observed_user_id=${student.id}&${courseQueryStr}&include[]=planner_overrides&include[]=course&per_page=100`;
+              
+              const missingData = await apiCallAllPages(missingEndpoint, baseUrl, token);
+
+              if (Array.isArray(missingData)) {
+                for (const item of missingData) {
+                  const cId = item.course_id;
+                  if (!missingByCourse[cId]) missingByCourse[cId] = [];
+
+                  missingByCourse[cId].push({
+                    id: item.id,
+                    name: item.name,
+                    dueAt: item.due_at ? new Date(item.due_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'No due date',
+                    rawDueAt: item.due_at || null,
+                    pointsPossible: item.points_possible,
+                    submissionTypes: item.submission_types || []
+                  });
+                }
+              }
+            } catch (err) {
+              console.warn(`Missing submissions endpoint note for student ${student.id}:`, err.message);
+            }
+          }
+
+          // Load overdue history from persistent browser storage
+          const overdueHistory = getOverdueHistory();
+
+          // Step 5: Query all course student submissions across full semester with pagination
+          updateStatus(`Checking all assignment records & late completions for ${student.name}...`, 'loading');
+          const submissionsByCourse = {};
+
+          await Promise.allSettled(coursesForSubmissions.map(async course => {
+            try {
+              const subEndpoint = `/api/v1/courses/${course.id}/students/submissions?student_ids[]=${student.id}&per_page=100&include[]=assignment`;
+              const subs = await apiCallAllPages(subEndpoint, baseUrl, token);
+              if (Array.isArray(subs)) {
+                submissionsByCourse[course.id] = subs;
+              }
+            } catch (e) {
+              console.warn(`Submissions query note for course ${course.id}:`, e.message);
+            }
+          }));
+
+          // Attach missing work and resolved late work to each course
+          for (const course of courses) {
+            const currentMissing = missingByCourse[course.id] || [];
+            let newMissingCount = 0;
+
+            for (const m of currentMissing) {
+              const historyKey = `${student.id}_${course.id}_${m.id}`;
+              const prevRecord = overdueHistory[historyKey];
+              if (!prevRecord) {
+                m.isNew = true;
+                newMissingCount++;
+                overdueHistory[historyKey] = {
+                  studentId: student.id,
+                  courseId: course.id,
+                  assignmentId: m.id,
+                  name: m.name,
+                  dueAt: m.dueAt,
+                  rawDueAt: m.rawDueAt,
+                  firstSeenMissing: new Date().toISOString(),
+                  lastSeenMissing: new Date().toISOString(),
+                  status: 'missing'
+                };
+              } else {
+                m.isNew = false;
+                prevRecord.lastSeenMissing = new Date().toISOString();
+                prevRecord.status = 'missing';
+              }
+            }
+
+            course.missingWork = currentMissing;
+            course.newMissingCount = newMissingCount;
+
+            // Extract items that were once late and are now turned in (system-verified from Canvas)
+            const rawSubs = submissionsByCourse[course.id] || course.allSubmissions || [];
+            attachSubmissionsToCourse(student, course, rawSubs, overdueHistory);
+          }
+
+          // Persist updated history back to browser storage
+          saveOverdueHistory(overdueHistory);
+
+          cachedStudentsData.push({
+            id: student.id,
+            name: student.name,
+            courses: courses
+          });
+        }
+
+        // Update semester/year filter dropdown options
+        populateTermFilter();
+
+        // Render populated dashboard
+        renderDashboard();
+
+        // Update status and timestamp
+        const now = new Date().toLocaleTimeString();
+        updateStatus(`Data successfully synchronized at ${now}`, 'ready');
+        if (settingsAutoOpened) {
+          settingsAutoOpened = false;
+          setSettingsOpen(false);
+        }
+        document.getElementById('lastSyncText').innerText = `Last updated: ${now}`;
+
+        // Reveal metrics, filter controls, and urgency legend
+        metricsBar.style.display = 'grid';
+        filterBar.style.display = 'flex';
+        document.getElementById('urgencyLegendBar').style.display = 'flex';
+
+      } catch (err) {
+        output.innerHTML = `
+          <div style="background:var(--accent-rose-bg); border:1px solid rgba(244,63,94,0.3); border-radius:var(--radius-md); padding:24px;">
+            <h3 style="color:#fecdd3; margin-bottom:8px;">Connection Failed</h3>
+            <p style="color:#ffe4e6; font-size:14px; margin-bottom:14px;">${err.message}</p>
+            <div style="font-size:12px; color:var(--text-muted); line-height:1.6;">
+              <strong>Troubleshooting Tips:</strong>
+              <ul style="margin-left:18px; margin-top:4px;">
+                <li>Verify your Canvas Base URL is accurate (e.g. <code>https://schoolname.instructure.com</code> without trailing slashes).</li>
+                <li>Confirm the access token has not expired and was generated from an account with observer privileges.</li>
+                <li>Ensure the local server proxy is active on port 3000.</li>
+              </ul>
+            </div>
+          </div>
+        `;
+        updateStatus(`Error: ${err.message}`, 'error');
+        console.error(err);
+      }
+    }
+
+    // Populate semester and year options into the term filter dropdown
+    function populateTermFilter() {
+      const termSelect = document.getElementById('termFilter');
+      const currentSelection = termSelect.value || 'current';
+
+      termSelect.innerHTML = '';
+
+      // Default option: Current Term (2026-2027 Q1)
+      const currentOpt = document.createElement('option');
+      currentOpt.value = 'current';
+      currentOpt.innerText = 'Current Term (2026-2027 Q1)';
+      termSelect.appendChild(currentOpt);
+
+      // All Semesters option
+      const allOpt = document.createElement('option');
+      allOpt.value = 'all';
+      allOpt.innerText = 'All Semesters / Years';
+      termSelect.appendChild(allOpt);
+
+      // Sort terms chronologically with current year first
+      const sortedTerms = Array.from(discoveredTerms).filter(t => t && t.trim().length > 0 && t !== 'Current Term').sort((a, b) => {
+        if (a.includes('2026-2027') && !b.includes('2026-2027')) return -1;
+        if (!a.includes('2026-2027') && b.includes('2026-2027')) return 1;
+        return a.localeCompare(b);
+      });
+
+      for (const term of sortedTerms) {
+        const option = document.createElement('option');
+        option.value = term;
+        option.innerText = term;
+        termSelect.appendChild(option);
+      }
+
+      // Preserve selection if valid, otherwise select current term
+      if (Array.from(termSelect.options).some(o => o.value === currentSelection)) {
+        termSelect.value = currentSelection;
+      } else {
+        termSelect.value = 'current';
+      }
+    }
+
+    // Render dashboard components based on cached data and active filters
+    function renderDashboard() {
+      const output = document.getElementById('output');
+      const searchQuery = (document.getElementById('courseSearch').value || '').trim().toLowerCase();
+      const selectedTerm = document.getElementById('termFilter').value || 'current';
+      const activeOnly = document.getElementById('activeOnlyToggle').checked;
+      const missingOnly = document.getElementById('missingOnlyToggle').checked;
+      const showResolved = document.getElementById('showResolvedToggle') ? document.getElementById('showResolvedToggle').checked : true;
+
+      let totalStudents = cachedStudentsData.length;
+      let displayedClassesCount = 0;
+      let totalMissingCount = 0;
+      let totalResolvedCount = 0;
+
+      output.innerHTML = '';
+
+      for (const student of cachedStudentsData) {
+        // Apply active filters to student's course collection
+        const filteredCourses = student.courses.filter(course => {
+          // Filter 1: Active classes only (default enabled)
+          if (activeOnly && !course.isActive) {
+            return false;
+          }
+
+          // Filter 2: Specific semester / year filter
+          if (selectedTerm === 'current') {
+            if (!isCurrentTerm(course)) {
+              return false;
+            }
+          } else if (selectedTerm !== 'all') {
+            if (course.term !== selectedTerm && course.rawTerm !== selectedTerm) {
+              return false;
+            }
+          }
+
+          // Filter 3: Missing work only filter
+          if (missingOnly && course.missingWork.length === 0) {
+            return false;
+          }
+
+          // Filter 4: Text search query
+          if (searchQuery) {
+            const matchesCourse = course.name.toLowerCase().includes(searchQuery) ||
+              (course.courseCode && course.courseCode.toLowerCase().includes(searchQuery)) ||
+              (course.term && course.term.toLowerCase().includes(searchQuery));
+            const matchesStudent = student.name.toLowerCase().includes(searchQuery);
+            return matchesCourse || matchesStudent;
+          }
+
+          return true;
+        });
+
+        // Skip student block if all courses filtered out and search is active
+        if (searchQuery && filteredCourses.length === 0 && !student.name.toLowerCase().includes(searchQuery)) {
+          continue;
+        }
+
+        displayedClassesCount += filteredCourses.length;
+        const studentMissing = filteredCourses.reduce((acc, c) => acc + c.missingWork.length, 0);
+        const studentResolved = filteredCourses.reduce((acc, c) => acc + (c.resolvedLateWork ? c.resolvedLateWork.length : 0), 0);
+        const studentLate = filteredCourses.reduce((acc, c) => acc + (c.resolvedLateWork ? c.resolvedLateWork.filter(r => r.isLate).length : 0), 0);
+        totalMissingCount += studentMissing;
+        totalResolvedCount += studentResolved;
+
+        const studentSection = document.createElement('section');
+        studentSection.className = 'student-block';
+        // Add marker class if student has zero courses matching active filters
+        if (filteredCourses.length === 0) {
+          studentSection.classList.add('has-no-courses');
+        }
+
+        // Student avatar initials
+        const initials = student.name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase() || 'ST';
+
+        let coursesCardsHtml = '';
+
+        if (filteredCourses.length === 0) {
+          let emptyMessage = 'No courses match the active filters.';
+          if (selectedTerm === 'current') {
+            emptyMessage = 'No current classes found for 2026-2027 Q1. Select "All Semesters / Years" to view past courses.';
+          } else if (activeOnly && selectedTerm !== 'all') {
+            emptyMessage = `No active courses found for ${selectedTerm}.`;
+          } else if (activeOnly) {
+            emptyMessage = 'No active classes found for this student. Uncheck "Active classes only" to view past/concluded courses.';
+          } else if (missingOnly) {
+            emptyMessage = 'No classes currently have missing assignments.';
+          }
+
+          coursesCardsHtml = `
+            <div style="grid-column: 1 / -1; padding: 28px; text-align: center; color: var(--text-muted); background: var(--bg-surface); border-radius: var(--radius-sm); border: 1px dashed var(--border-subtle);">
+              ${emptyMessage}
+            </div>
+          `;
+        } else {
+          coursesCardsHtml = filteredCourses.map(course => {
+            const gradeInfo = getGradeDetails(course.grade, course.score);
+
+            let missingWorkHtml = '';
+            if (course.missingWork.length > 0) {
+              const listItems = course.missingWork.map(m => {
+                const urgency = getMissingUrgency(m.rawDueAt);
+                const isPaper = m.submissionTypes && m.submissionTypes.length > 0 && m.submissionTypes.every(t => ['on_paper', 'none'].includes(t));
+                return `
+                  <li class="missing-item ${urgency.itemClass}">
+                    <div class="missing-item-header">
+                      <span class="missing-title">&bull; ${m.name}${m.isNew ? ' <span class="badge-mini badge-mini-new" style="margin-left:4px; font-size:9.5px; padding:1px 6px;">New Late</span>' : ''}${isPaper ? ' <span class="badge-mini" style="margin-left:4px; font-size:9.5px; padding:1px 6px; background:rgba(245,158,11,0.15); color:#fbbf24; border:1px solid rgba(245,158,11,0.3); border-radius:4px;">Paper Assignment</span>' : ''}</span>
+                      <span class="urgency-tag">${urgency.tagHtml}</span>
+                    </div>
+                    <span class="missing-due">Due: ${m.dueAt}${m.pointsPossible ? ` &bull; ${m.pointsPossible} pts` : ''}</span>
+                  </li>
+                `;
+              }).join('');
+
+              missingWorkHtml = `
+                <div class="missing-work-container">
+                  <div class="missing-work-header">
+                    <span>Missing Assignments</span>
+                    <span class="missing-count-badge">${course.missingWork.length}</span>
+                  </div>
+                  <ul class="missing-list">
+                    ${listItems}
+                  </ul>
+                </div>
+              `;
+            } else {
+              missingWorkHtml = `
+                <div class="missing-work-container">
+                  <div class="no-missing-banner">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                    <span>All caught up &bull; No missing work</span>
+                  </div>
+                </div>
+              `;
+            }
+
+            // Render turned-in work section if enabled and items exist
+            let resolvedWorkHtml = '';
+            if (showResolved && course.resolvedLateWork && course.resolvedLateWork.length > 0) {
+              const visibleItems = course.resolvedLateWork.slice(0, 3);
+              const extraItems = course.resolvedLateWork.slice(3);
+              const containerId = `resolvedMore_${student.id}_${course.id}`;
+              const btnId = `resolvedToggleBtn_${student.id}_${course.id}`;
+
+              const renderResolvedItem = r => {
+                const lateness = r.lateness || getLatenessInfo(r.rawDueAt, r.rawSubmittedAt, r.isLate);
+                const itemCss = lateness.cssClass || 'resolved-item-ontime';
+                const tagCss = lateness.tagClass || 'resolved-tag-ontime';
+
+                return `
+                  <li class="resolved-item ${itemCss}">
+                    <div class="resolved-item-header">
+                      <span class="resolved-title">&#10003; ${r.name}</span>
+                      <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+                        <span class="resolved-lateness-tag ${tagCss}">${lateness.label}</span>
+                        <span class="resolved-status-tag">${r.grade !== null && r.grade !== undefined ? `Graded: ${r.grade}${r.pointsPossible ? `/${r.pointsPossible}` : ''}` : 'Submitted'}</span>
+                      </div>
+                    </div>
+                    <div class="resolved-meta-row">
+                      <span class="resolved-timestamp">&#128337; Turned in: ${r.submittedAt}</span>
+                      <span style="color:var(--text-faint);">&bull; Due: ${r.dueAt}</span>
+                    </div>
+                  </li>
+                `;
+              };
+
+              resolvedWorkHtml = `
+                <div class="resolved-work-container">
+                  <div class="resolved-work-header">
+                    <span>&#10003; Turned In Work</span>
+                    <span class="resolved-count-badge">${course.resolvedLateWork.length}</span>
+                  </div>
+                  <ul class="resolved-list">
+                    ${visibleItems.map(renderResolvedItem).join('')}
+                  </ul>
+                  ${extraItems.length > 0 ? `
+                    <ul id="${containerId}" class="resolved-list" style="display:none; margin-top:6px;">
+                      ${extraItems.map(renderResolvedItem).join('')}
+                    </ul>
+                    <button id="${btnId}" class="resolved-toggle-btn" onclick="toggleResolvedExpand('${containerId}', '${btnId}')">
+                      Show ${extraItems.length} more turned-in items...
+                    </button>
+                  ` : ''}
+                </div>
+              `;
+            }
+
+            return `
+              <div class="course-card ${course.isActive ? '' : 'concluded'}">
+                <div class="course-header">
+                  <div class="course-title-block">
+                    <div class="course-meta-tags">
+                      <span class="tag-term">${course.term}</span>
+                      <span class="${course.isActive ? 'tag-status-active' : 'tag-status-concluded'}">
+                        ${course.isActive ? 'Active' : 'Concluded'}
+                      </span>
+                    </div>
+                    <h3 class="course-title">${course.name}</h3>
+                    <div class="course-code">${course.courseCode || `ID: ${course.id}`}</div>
+                    <div class="course-badges-row">
+                      ${course.missingWork.length > 0 ? `<span class="badge-mini badge-mini-warn">${course.missingWork.length} Overdue</span>` : `<span class="badge-mini badge-mini-success">0 Overdue</span>`}
+                      ${course.resolvedLateWork && course.resolvedLateWork.length > 0 ? `<span class="badge-mini badge-mini-success">&#10003; ${course.resolvedLateWork.length} Turned In</span>` : ''}
+                      ${course.newMissingCount > 0 ? `<span class="badge-mini badge-mini-new">+${course.newMissingCount} New Late</span>` : ''}
+                    </div>
+                  </div>
+                  <div class="grade-pill ${gradeInfo.cls}">
+                    <span class="grade-letter">${gradeInfo.letter}</span>
+                    ${gradeInfo.scoreText ? `<span class="grade-pct">${gradeInfo.scoreText}</span>` : ''}
+                  </div>
+                </div>
+                ${missingWorkHtml}
+                ${resolvedWorkHtml}
+              </div>
+            `;
+          }).join('');
+        }
+
+        // Generate paper report layout optimized for horizontal space and compact vertical printing
+        let printCoursesHtml = '';
+        if (filteredCourses.length === 0) {
+          printCoursesHtml = `
+            <div class="print-no-missing-line" style="padding: 10px 0;">
+              No enrolled courses match active filter criteria.
+            </div>
+          `;
+        } else {
+          printCoursesHtml = filteredCourses.map(course => {
+            const gradeInfo = getGradeDetails(course.grade, course.score);
+
+            // Group missing assignments by age category
+            const groups = {
+              today: [],
+              week: [],
+              lastWeek: [],
+              critical: []
+            };
+
+            for (const m of course.missingWork) {
+              const urgency = getMissingUrgency(m.rawDueAt);
+              if (urgency.urgency === 'today') {
+                groups.today.push(m);
+              } else if (urgency.urgency === 'week') {
+                groups.week.push(m);
+              } else if (urgency.isPulse || urgency.urgency === 'critical') {
+                groups.critical.push(m);
+              } else {
+                groups.lastWeek.push(m);
+              }
+            }
+
+            let printMissingGroupsHtml = '';
+            if (course.missingWork.length > 0) {
+              const groupSections = [];
+
+              if (groups.today.length > 0) {
+                groupSections.push(`
+                  <div class="print-age-group print-group-today">
+                    <div class="print-group-heading">Due Today (${groups.today.length})</div>
+                    <div class="print-group-list">
+                      ${groups.today.map(m => `
+                        <div class="print-assignment-line">
+                          <span class="print-assign-bullet">&bull;</span>
+                          <span class="print-assign-name">${m.name}</span>
+                          <span class="print-assign-dots"></span>
+                          <span class="print-assign-due">Due: ${m.dueAt}${m.pointsPossible ? ` &bull; ${m.pointsPossible} pts` : ''}</span>
+                        </div>
+                      `).join('')}
+                    </div>
+                  </div>
+                `);
+              }
+
+              if (groups.week.length > 0) {
+                groupSections.push(`
+                  <div class="print-age-group print-group-week">
+                    <div class="print-group-heading">Due This Week (${groups.week.length})</div>
+                    <div class="print-group-list">
+                      ${groups.week.map(m => `
+                        <div class="print-assignment-line">
+                          <span class="print-assign-bullet">&bull;</span>
+                          <span class="print-assign-name">${m.name}</span>
+                          <span class="print-assign-dots"></span>
+                          <span class="print-assign-due">Due: ${m.dueAt}${m.pointsPossible ? ` &bull; ${m.pointsPossible} pts` : ''}</span>
+                        </div>
+                      `).join('')}
+                    </div>
+                  </div>
+                `);
+              }
+
+              if (groups.lastWeek.length > 0) {
+                groupSections.push(`
+                  <div class="print-age-group print-group-older">
+                    <div class="print-group-heading">Due Last Week (${groups.lastWeek.length})</div>
+                    <div class="print-group-list">
+                      ${groups.lastWeek.map(m => `
+                        <div class="print-assignment-line">
+                          <span class="print-assign-bullet">&bull;</span>
+                          <span class="print-assign-name">${m.name}</span>
+                          <span class="print-assign-dots"></span>
+                          <span class="print-assign-due">Due: ${m.dueAt}${m.pointsPossible ? ` &bull; ${m.pointsPossible} pts` : ''}</span>
+                        </div>
+                      `).join('')}
+                    </div>
+                  </div>
+                `);
+              }
+
+              if (groups.critical.length > 0) {
+                groupSections.push(`
+                  <div class="print-age-group print-group-critical">
+                    <div class="print-group-heading">&gt; 2 Weeks Ago (${groups.critical.length})</div>
+                    <div class="print-group-list">
+                      ${groups.critical.map(m => `
+                        <div class="print-assignment-line">
+                          <span class="print-assign-bullet">&bull;</span>
+                          <span class="print-assign-name">${m.name}</span>
+                          <span class="print-assign-dots"></span>
+                          <span class="print-assign-due">Due: ${m.dueAt}${m.pointsPossible ? ` &bull; ${m.pointsPossible} pts` : ''}</span>
+                        </div>
+                      `).join('')}
+                    </div>
+                  </div>
+                `);
+              }
+
+              printMissingGroupsHtml = groupSections.join('');
+            } else {
+              printMissingGroupsHtml = `
+                <div class="print-no-missing-line">
+                  <span class="print-check-mark">&#10003;</span> All caught up &bull; No missing assignments
+                </div>
+              `;
+            }
+
+            // Render turned-in work in paper report when turned-in display filter is enabled
+            let printResolvedHtml = '';
+            if (showResolved && course.resolvedLateWork && course.resolvedLateWork.length > 0) {
+              printResolvedHtml = `
+                <div class="print-resolved-section">
+                  <div class="print-resolved-heading">&#10003; Turned In Work (${course.resolvedLateWork.length})</div>
+                  <div class="print-group-list">
+                    ${course.resolvedLateWork.map(r => {
+                      const lateness = r.lateness || getLatenessInfo(r.rawDueAt, r.rawSubmittedAt, r.isLate);
+                      let lateColor = '#166534';
+                      if (lateness.status === 'late-mild') lateColor = '#854d0e';
+                      else if (lateness.status === 'late-moderate') lateColor = '#c2410c';
+                      else if (lateness.status === 'late-severe') lateColor = '#991b1b';
+
+                      return `
+                        <div class="print-resolved-line">
+                          <span class="print-assign-bullet" style="color:${lateColor};">&#10003;</span>
+                          <span class="print-assign-name" style="color:#1e293b;">${r.name}</span>
+                          <span class="print-assign-dots"></span>
+                          <span class="print-assign-due" style="color:${lateColor}; font-weight:${lateness.status !== 'ontime' ? '600' : 'normal'};">Turned in: ${r.submittedAt} &bull; ${lateness.label}${r.grade ? ` &bull; Grade: ${r.grade}` : ''}</span>
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+                </div>
+              `;
+            }
+
+            return `
+              <div class="print-course-row">
+                <div class="print-course-header">
+                  <span class="print-course-name">${course.name}</span>
+                  <span class="print-course-grade ${gradeInfo.cls}">
+                    <span class="print-grade-letter">${gradeInfo.letter}</span>
+                    ${gradeInfo.scoreText ? `<span class="print-grade-score">(${gradeInfo.scoreText})</span>` : ''}
+                  </span>
+                </div>
+                ${printMissingGroupsHtml}
+                ${printResolvedHtml}
+              </div>
+            `;
+          }).join('');
+        }
+
+        studentSection.dataset.studentId = student.id;
+        studentSection.innerHTML = `
+          <!-- Print-only header displayed at top of each student's page -->
+          <div class="print-report-header" style="display:none;">
+            <div class="print-report-top">
+              <div class="print-report-title">Academic Progress &amp; Missing Work Report</div>
+              <div class="print-report-badge ${studentMissing > 0 ? 'badge-warn' : 'badge-ok'}">
+                ${studentMissing > 0 ? `${studentMissing} MISSING ASSIGNMENT${studentMissing > 1 ? 'S' : ''}` : 'ALL WORK CAUGHT UP'}
+              </div>
+            </div>
+            <div class="print-report-meta">
+              <span>Student: <strong>${student.name}</strong> &bull; ID: ${student.id}</span>
+              <span>Institution: Shakopee Canvas LMS</span>
+              <span>Generated: ${new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+              <span>Classes: ${filteredCourses.length} ${filteredCourses.length === student.courses.length ? 'Enrolled' : `Displayed (${student.courses.length} Total Enrolled)`}</span>
+              ${missingOnly ? '<span>Filter: Only with Missing Work</span>' : ''}
+              ${!showResolved ? '<span>Turned-in Work: Hidden</span>' : ''}
+            </div>
+            <div class="print-legend-line">
+              <span class="print-legend-label">Urgency Key:</span>
+              <span class="print-legend-tag print-tag-today">&bull; Due Today</span>
+              <span class="print-legend-tag print-tag-week">&bull; Due This Week</span>
+              <span class="print-legend-tag print-tag-older">&bull; Due Last Week</span>
+              <span class="print-legend-tag print-tag-critical">&bull; &gt; 2 Weeks Ago</span>
+              ${showResolved ? '<span class="print-legend-tag" style="color: #166534 !important;">&bull; &#10003; Turned In Work</span>' : ''}
+            </div>
+          </div>
+
+          <div class="student-header">
+            <div class="student-identity">
+              <div class="student-avatar">${initials}</div>
+              <div>
+                <h2 class="student-name">${student.name}</h2>
+                <div class="student-meta">
+                  Student ID: ${student.id} &bull; Showing ${filteredCourses.length} of ${student.courses.length} total enrolled class(es)
+                </div>
+              </div>
+            </div>
+            <div class="student-badges">
+              <button class="btn btn-secondary no-print" style="padding: 5px 12px; font-size: 12px; border-radius: 9999px;" onclick="printStudentReport(${student.id})" title="Print 1-page report for this student only">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                  <rect x="6" y="14" width="12" height="8"></rect>
+                </svg>
+                Print Student Report
+              </button>
+              <div class="stat-square ${studentMissing > 0 ? 'stat-square-missing-alert' : 'stat-square-missing-ok'}" title="${studentMissing} missing assignment(s)">
+                <span class="stat-square-num">${studentMissing}</span>
+                <span class="stat-square-label">MISSING</span>
+              </div>
+              <div class="stat-square ${studentLate > 0 ? 'stat-square-late-alert' : 'stat-square-late-ok'}" title="${studentLate} late turn-in(s)">
+                <span class="stat-square-num">${studentLate}</span>
+                <span class="stat-square-label">LATE</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 30-Day Throughput and Backlog Burn Chart (Option C: Burn Piles + Trendline) -->
+          <div id="throughputContainer_${student.id}" class="student-throughput-card"></div>
+
+          <!-- Interactive Screen Grid View -->
+          <div class="course-grid">
+            ${coursesCardsHtml}
+          </div>
+
+          <!-- Paper Report View (Optimized for horizontal space and compact vertical printing) -->
+          <div class="print-courses-container" style="display:none;">
+            ${printCoursesHtml}
+          </div>
+        `;
+
+        output.appendChild(studentSection);
+
+        // Render 30-day throughput burn-chart for this student
+        updateStudentThroughputCard(student.id);
+      }
+
+      // Update aggregate metrics display
+      document.getElementById('metricStudents').innerText = totalStudents;
+      document.getElementById('metricClasses').innerText = displayedClassesCount;
+
+      const metricMissingEl = document.getElementById('metricMissing');
+      metricMissingEl.innerText = totalMissingCount;
+      if (totalMissingCount > 0) {
+        metricMissingEl.className = 'metric-value highlight-warn';
+      } else {
+        metricMissingEl.className = 'metric-value highlight-good';
+      }
+
+      const metricResolvedEl = document.getElementById('metricResolved');
+      if (metricResolvedEl) {
+        metricResolvedEl.innerText = totalResolvedCount;
+      }
+    }
+
+    // Interactive filter trigger ensuring assignments for newly selected semester are loaded
+    async function filterDashboard() {
+      const selectedTerm = document.getElementById('termFilter') ? document.getElementById('termFilter').value || 'current' : 'current';
+      const activeOnly = document.getElementById('activeOnlyToggle') ? document.getElementById('activeOnlyToggle').checked : true;
+      const baseUrl = (document.getElementById('canvasUrl').value || '').trim().replace(/\/+$/, '');
+      const token = (document.getElementById('apiToken').value || '').trim();
+
+      // Find courses for the selected term/state that need submission records
+      const pendingCourses = [];
+      for (const student of cachedStudentsData) {
+        for (const course of student.courses) {
+          const matches = (activeOnly ? course.isActive : true) &&
+            (selectedTerm === 'all' || (selectedTerm === 'current' ? (isCurrentTerm(course) || course.isActive) : (course.term === selectedTerm || course.rawTerm === selectedTerm)));
+          if (matches && (!course.allSubmissions || course.allSubmissions.length === 0)) {
+            pendingCourses.push({ student, course });
+          }
+        }
+      }
+
+      if (pendingCourses.length > 0 && baseUrl && token) {
+        updateStatus(`Loading assignments for ${pendingCourses.length} course(s)...`, 'loading');
+        const overdueHistory = getOverdueHistory();
+        await Promise.allSettled(pendingCourses.map(async ({ student, course }) => {
+          try {
+            const subEndpoint = `/api/v1/courses/${course.id}/students/submissions?student_ids[]=${student.id}&per_page=100&include[]=assignment`;
+            const subs = await apiCallAllPages(subEndpoint, baseUrl, token);
+            if (Array.isArray(subs)) {
+              attachSubmissionsToCourse(student, course, subs, overdueHistory);
+            }
+          } catch (e) {
+            console.warn(`On-demand submissions fetch note for course ${course.id}:`, e.message);
+          }
+        }));
+        saveOverdueHistory(overdueHistory);
+        updateStatus('Data updated', 'ready');
+      }
+
+      renderDashboard();
+    }
+
+    // Trigger printable report for all students matching active filters
+    function printAllReports() {
+      // Check if any student blocks have classes matching current filters
+      const printableBlocks = document.querySelectorAll('.student-block:not(.has-no-courses)');
+      if (printableBlocks.length === 0) {
+        alert('No classes match the active filters to print.');
+        return;
+      }
+
+      // Ensure student blocks with displayed classes are visible, while keeping empty blocks hidden
+      document.querySelectorAll('.student-block').forEach(el => {
+        if (el.classList.contains('has-no-courses')) {
+          el.classList.add('no-print');
+        } else {
+          el.classList.remove('no-print');
+        }
+      });
+      window.print();
+    }
+
+    // Trigger printable report for an individual student only
+    function printStudentReport(studentId) {
+      // Hide other student cards during printing
+      document.querySelectorAll('.student-block').forEach(el => {
+        if (el.dataset.studentId == studentId) {
+          el.classList.remove('no-print');
+        } else {
+          el.classList.add('no-print');
+        }
+      });
+
+      // Cleanup listener to restore full dashboard display after printing dialog closes
+      const restoreAll = () => {
+        document.querySelectorAll('.student-block').forEach(el => {
+          if (el.classList.contains('has-no-courses')) {
+            el.classList.add('no-print');
+          } else {
+            el.classList.remove('no-print');
+          }
+        });
+        window.removeEventListener('afterprint', restoreAll);
+      };
+      window.addEventListener('afterprint', restoreAll);
+
+      // Open browser print preview
+      window.print();
+    }
+
+    // Storage for student chart filter, mode, and timeframe configurations (keyed by student ID)
+    const studentChartState = {};
+
+    // Data cache for active throughput chart tooltips (keyed by student ID)
+    const studentThroughputDataMap = {};
+
+    // Determine courses for a student that match current semester filter and active classes toggle
+    function getRelevantCoursesForStudent(student) {
+      const termSelect = document.getElementById('termFilter');
+      const selectedTerm = termSelect ? termSelect.value || 'current' : 'current';
+      const activeOnly = document.getElementById('activeOnlyToggle') ? document.getElementById('activeOnlyToggle').checked : true;
+
+      const matching = student.courses.filter(course => {
+        // Active classes filter
+        if (activeOnly && !course.isActive) {
+          return false;
+        }
+
+        // Semester filter
+        if (selectedTerm === 'current') {
+          return isCurrentTerm(course) || course.isActive;
+        } else if (selectedTerm !== 'all') {
+          return course.term === selectedTerm || course.rawTerm === selectedTerm;
+        }
+
+        return true;
+      });
+
+      if (matching.length > 0) return matching;
+      const activeFallback = student.courses.filter(c => c.isActive || c.isCurrentTerm);
+      return activeFallback.length > 0 ? activeFallback : student.courses;
+    }
+
+    // Calculate daily assignment throughput, burn piles, forward 7-day upcoming workload, carryover starting balance, and net progress
+    function calculateThroughputData(student, selectedCourseId = 'all', mode = 'all', timeframe = '30') {
+      // Filter target courses based on active chip selection or currently active/selected semester
+      const relevantCourses = getRelevantCoursesForStudent(student);
+      const targetCourses = (selectedCourseId === 'all')
+        ? relevantCourses
+        : student.courses.filter(c => String(c.id) === String(selectedCourseId));
+
+      const now = new Date();
+      const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+      // Load overdue history for tracking items that were ever marked overdue or late
+      const overdueHistory = getOverdueHistory();
+
+      // Deduplicate and gather assignments across chosen courses
+      const processedAssignments = new Map();
+      // Excused assignments are dropped from the chart entirely
+      const excusedKeys = new Set();
+
+      for (const course of targetCourses) {
+        // Collect submissions from course
+        const subs = course.allSubmissions || [];
+        for (const s of subs) {
+          if (!s || !s.assignment_id) continue;
+          const assign = s.assignment || {};
+          const subTypes = assign.submission_types || [];
+          const hasSub = Boolean(s.submitted_at);
+
+          const key = `${course.id}_${s.assignment_id}`;
+          if (s.excused === true) {
+            excusedKeys.add(key);
+            continue;
+          }
+
+          // Filter out assignments that will never be turned in online
+          if (!canBeSubmittedOnline(subTypes, hasSub)) {
+            continue;
+          }
+
+          const historyKey = `${student.id}_${course.id}_${s.assignment_id}`;
+          const prevRecord = overdueHistory[historyKey];
+          const wasTrackedMissing = Boolean(prevRecord && prevRecord.status === 'missing');
+
+          const rawDueAt = assign.due_at || null;
+          const rawSubAt = s.submitted_at || null;
+
+          // Graded with no submission counts as turned in on the grade date, unless Canvas
+          // flagged it missing (late policies auto-grade missing work as a 0)
+          const flaggedMissing = s.missing === true || s.late_policy_status === 'missing';
+          const isGradedOnly = !rawSubAt && !flaggedMissing && s.workflow_state === 'graded' && s.score !== null && s.score !== undefined;
+          const resolvedAt = rawSubAt || (isGradedOnly ? (s.graded_at || rawDueAt) : null);
+
+          const isLate = s.late === true || Boolean(rawDueAt && resolvedAt && new Date(resolvedAt) > new Date(rawDueAt)) || wasTrackedMissing;
+          const isMissing = flaggedMissing || Boolean(rawDueAt && !resolvedAt && new Date(rawDueAt) < now);
+          const wasEverOverdueOrLate = isLate || isMissing || Boolean(prevRecord);
+
+          processedAssignments.set(key, {
+            id: s.assignment_id,
+            name: assign.name || `Assignment ${s.assignment_id}`,
+            courseName: course.name,
+            courseId: course.id,
+            rawDueAt: rawDueAt,
+            rawSubAt: rawSubAt,
+            resolvedAt: resolvedAt,
+            isLate: isLate,
+            isMissing: isMissing,
+            wasEverOverdueOrLate: wasEverOverdueOrLate,
+            pointsPossible: assign.points_possible
+          });
+        }
+
+        // Collect missing assignments from course
+        const missing = course.missingWork || [];
+        for (const m of missing) {
+          const subTypes = m.submissionTypes || [];
+          // Filter out assignments that will never be turned in online
+          if (!canBeSubmittedOnline(subTypes, false)) {
+            continue;
+          }
+
+          const key = `${course.id}_${m.id}`;
+          if (excusedKeys.has(key)) continue;
+          if (!processedAssignments.has(key)) {
+            processedAssignments.set(key, {
+              id: m.id,
+              name: m.name,
+              courseName: course.name,
+              courseId: course.id,
+              rawDueAt: m.rawDueAt,
+              rawSubAt: null,
+              resolvedAt: null,
+              isLate: false,
+              isMissing: true,
+              wasEverOverdueOrLate: true,
+              pointsPossible: m.pointsPossible
+            });
+          } else {
+            const existing = processedAssignments.get(key);
+            existing.isMissing = true;
+            existing.wasEverOverdueOrLate = true;
+            // Canvas says it is still missing, so a grade alone does not count as turned in
+            if (!existing.rawSubAt) existing.resolvedAt = null;
+          }
+        }
+      }
+
+      // Determine timeframe window parameters
+      let pastDays = 30;
+      let timeframeLabel = '30-Day';
+      let shortTfLabel = '30d';
+
+      if (timeframe === '7') {
+        pastDays = 7;
+        timeframeLabel = '7-Day';
+        shortTfLabel = '7d';
+      } else if (timeframe === '14') {
+        pastDays = 14;
+        timeframeLabel = '14-Day';
+        shortTfLabel = '14d';
+      } else if (timeframe === '30') {
+        pastDays = 30;
+        timeframeLabel = '30-Day';
+        shortTfLabel = '30d';
+      } else if (timeframe === 'semester') {
+        timeframeLabel = 'Full Semester';
+        shortTfLabel = 'Semester';
+
+        // Find earliest term date or earliest assignment activity date
+        let earliestDate = null;
+        for (const course of targetCourses) {
+          if (course.termStartAt) {
+            const d = new Date(course.termStartAt);
+            if (!isNaN(d.getTime()) && (!earliestDate || d < earliestDate)) {
+              earliestDate = d;
+            }
+          }
+        }
+        for (const item of processedAssignments.values()) {
+          if (item.rawDueAt) {
+            const d = new Date(item.rawDueAt);
+            if (!isNaN(d.getTime()) && (!earliestDate || d < earliestDate)) {
+              earliestDate = d;
+            }
+          }
+          if (item.rawSubAt) {
+            const d = new Date(item.rawSubAt);
+            if (!isNaN(d.getTime()) && (!earliestDate || d < earliestDate)) {
+              earliestDate = d;
+            }
+          }
+        }
+
+        if (earliestDate && earliestDate <= todayMidnight) {
+          const diffDays = Math.ceil((todayMidnight - earliestDate) / (1000 * 60 * 60 * 24)) + 1;
+          pastDays = Math.max(7, Math.min(180, diffDays));
+        } else {
+          pastDays = 90; // Default semester duration fallback
+        }
+      }
+
+      const futureDays = 7;
+      const windowStartDate = new Date(todayMidnight);
+      windowStartDate.setDate(todayMidnight.getDate() - (pastDays - 1));
+
+      // Construct timeline calendar days
+      const days = [];
+      const dayMap = {};
+
+      for (let offset = -(pastDays - 1); offset <= futureDays; offset++) {
+        const d = new Date(todayMidnight);
+        d.setDate(todayMidnight.getDate() + offset);
+        const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+        const isToday = offset === 0;
+        const isFuture = offset > 0;
+
+        const dayObj = {
+          index: offset + pastDays - 1,
+          offset: offset,
+          date: d,
+          dateStr: dateStr,
+          displayDate: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+          weekday: d.toLocaleDateString(undefined, { weekday: 'short' }),
+          fullDate: d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }),
+          isWeekend: isWeekend,
+          isToday: isToday,
+          isFuture: isFuture,
+          dueCount: 0,
+          turnedInCount: 0,
+          dueItems: [],
+          turnedInItems: [],
+          netDelta: 0,
+          cumulativeNet: 0
+        };
+
+        days.push(dayObj);
+        dayMap[dateStr] = dayObj;
+      }
+
+      // Bucket due dates (red/orange bars) and turn-ins (green bars) by calendar day
+      const toDayKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const missingTimeline = [];
+
+      for (const item of processedAssignments.values()) {
+        const dueD = item.rawDueAt ? new Date(item.rawDueAt) : null;
+        const resolvedD = item.resolvedAt ? new Date(item.resolvedAt) : null;
+        const hasDue = Boolean(dueD && !isNaN(dueD.getTime()));
+        const hasResolved = Boolean(resolvedD && !isNaN(resolvedD.getTime()));
+
+        if (hasDue) {
+          missingTimeline.push({ dueTime: dueD.getTime(), resolvedTime: hasResolved ? resolvedD.getTime() : null });
+          const day = dayMap[toDayKey(dueD)];
+          if (day && (mode === 'all' || (item.wasEverOverdueOrLate && !day.isFuture))) {
+            day.dueCount++;
+            day.dueItems.push(item);
+          }
+        }
+
+        // Turn-ins count on the day they happened, including work turned in ahead of its due date
+        if (hasResolved) {
+          const day = dayMap[toDayKey(resolvedD)];
+          if (day && (mode === 'all' || item.isLate)) {
+            day.turnedInCount++;
+            day.turnedInItems.push(item);
+          }
+        }
+      }
+
+      // An item is missing once its due date passes with no turn-in or grade yet
+      const countMissingAt = cutoffTime => missingTimeline.reduce((n, t) =>
+        n + (t.dueTime < cutoffTime && (t.resolvedTime === null || t.resolvedTime > cutoffTime) ? 1 : 0), 0);
+
+      // Balances are the missing count shown as a negative (0 = caught up)
+      const initialRunningNet = -countMissingAt(windowStartDate.getTime());
+
+      let runningNet = initialRunningNet;
+      let totalTurnedIn = 0;
+      let totalDue = 0;
+      let totalUpcomingDue = 0;
+
+      for (const day of days) {
+        if (day.isFuture) {
+          totalUpcomingDue += day.dueCount;
+          day.netDelta = 0;
+          day.cumulativeNet = runningNet;
+        } else {
+          const endOfDay = new Date(day.date);
+          endOfDay.setDate(endOfDay.getDate() + 1);
+          const dayNet = -countMissingAt(Math.min(endOfDay.getTime(), now.getTime()));
+          day.netDelta = dayNet - runningNet;
+          day.cumulativeNet = dayNet;
+          runningNet = dayNet;
+          totalTurnedIn += day.turnedInCount;
+          totalDue += day.dueCount;
+        }
+      }
+
+      const currentNetBalance = runningNet;
+      const windowNetDelta = currentNetBalance - initialRunningNet;
+      const paceRatio = totalDue > 0 ? (totalTurnedIn / totalDue).toFixed(2) : (totalTurnedIn > 0 ? 'High' : '1.0');
+
+      const currentMissing = -currentNetBalance;
+      const startMissing = -initialRunningNet;
+      const tfText = timeframeLabel.toLowerCase();
+
+      let statusLabel = 'Caught Up (0)';
+      let statusClass = 'chart-badge-ahead';
+      if (currentMissing > 0) {
+        statusLabel = `${currentNetBalance} Missing`;
+        statusClass = windowNetDelta > 0 ? 'chart-badge-even' : 'chart-badge-behind';
+      }
+
+      let statusSummary = `Missing work held steady at ${currentMissing} over ${tfText}.`;
+      if (windowNetDelta > 0) {
+        statusSummary = `Missing work dropped by ${windowNetDelta} over ${tfText} (from ${startMissing} to ${currentMissing}).`;
+      } else if (windowNetDelta < 0) {
+        statusSummary = `Missing work grew by ${Math.abs(windowNetDelta)} over ${tfText} (from ${startMissing} to ${currentMissing}).`;
+      }
+
+      // Flag when the reconstructed count disagrees with Canvas's own missing list
+      const canvasMissingCount = targetCourses.reduce((acc, c) => acc + (c.missingWork ? c.missingWork.length : 0), 0);
+      const missingMismatchNote = currentMissing !== canvasMissingCount
+        ? `Chart counts ${currentMissing} missing today, but Canvas reports ${canvasMissingCount}.`
+        : '';
+
+      return {
+        days,
+        totalTurnedIn,
+        totalDue,
+        totalUpcomingDue,
+        windowNetDelta,
+        currentNetBalance,
+        initialRunningNet,
+        canvasMissingCount,
+        missingMismatchNote,
+        paceRatio,
+        statusLabel,
+        statusClass,
+        statusSummary,
+        targetCourses,
+        mode,
+        selectedCourseId,
+        timeframe,
+        timeframeLabel,
+        shortTfLabel
+      };
+    }
+
+    // Generate SVG markup for burn piles, upcoming workload, and carryover trendline chart
+    function generateThroughputSvg(student, data) {
+      const chartLeft = 55;
+      const chartRight = 915;
+      const chartWidth = chartRight - chartLeft;
+      const chartBottom = 200;
+      const totalDays = data.days.length;
+      const stepWidth = chartWidth / totalDays;
+      const todayIndex = data.days.findIndex(d => d.isToday);
+      const xTodayDivider = chartLeft + (todayIndex + 1) * stepWidth;
+
+      // Determine scale for daily burn pile bars
+      const maxBarVal = Math.max(2, ...data.days.map(d => Math.max(d.dueCount, d.turnedInCount)));
+      const barMaxH = 75;
+
+      // Determine scale for cumulative net progress trendline (scaled across historical days and starting balance)
+      const histDays = data.days.filter(d => !d.isFuture);
+      const allNetValues = [0, data.initialRunningNet, ...histDays.map(d => d.cumulativeNet)];
+      const minNet = Math.min(...allNetValues);
+      const maxNet = Math.max(...allNetValues);
+      const spanNet = Math.max(4, maxNet - minNet);
+      const trendTop = 35;
+      const trendBottom = 175;
+      const trendSpan = trendBottom - trendTop;
+
+      const getYNet = val => trendBottom - ((val - minNet) / spanNet) * trendSpan;
+      const yZero = getYNet(0);
+      const yStart = getYNet(data.initialRunningNet);
+
+      // Build trendline coordinate points for historical days
+      const pts = data.days.map((d, i) => ({
+        x: chartLeft + (i + 0.5) * stepWidth,
+        y: getYNet(d.cumulativeNet),
+        net: d.cumulativeNet,
+        active: d.dueCount > 0 || d.turnedInCount > 0,
+        isToday: d.isToday,
+        isFuture: d.isFuture
+      }));
+
+      const histPts = pts.filter(p => !p.isFuture);
+
+      // Connect trendline starting from carryover balance at the chart's left edge
+      let pathD = `M ${chartLeft.toFixed(1)} ${yStart.toFixed(1)}`;
+      for (let i = 0; i < histPts.length; i++) {
+        pathD += ` L ${histPts[i].x.toFixed(1)} ${histPts[i].y.toFixed(1)}`;
+      }
+
+      // Shaded area under/over the trendline relative to zero baseline
+      const areaD = `${pathD} L ${histPts[histPts.length - 1].x.toFixed(1)} ${yZero.toFixed(1)} L ${chartLeft.toFixed(1)} ${yZero.toFixed(1)} Z`;
+
+      // Render weekend column backgrounds
+      const weekendRects = data.days.map((d, i) => {
+        if (!d.isWeekend) return '';
+        const xLeft = chartLeft + i * stepWidth;
+        return `<rect x="${xLeft.toFixed(1)}" y="25" width="${stepWidth.toFixed(1)}" height="175" fill="rgba(255, 255, 255, 0.02)"/>`;
+      }).join('');
+
+      // Render upcoming future days backdrop shading
+      const futureBackdrop = `
+        <rect x="${xTodayDivider.toFixed(1)}" y="25" width="${((totalDays - todayIndex - 1) * stepWidth).toFixed(1)}" height="175" fill="rgba(251, 146, 60, 0.035)"/>
+        <line x1="${xTodayDivider.toFixed(1)}" y1="25" x2="${xTodayDivider.toFixed(1)}" y2="${chartBottom}" stroke="#38bdf8" stroke-dasharray="3,3" stroke-width="1.2" opacity="0.65"/>
+        <text x="${(xTodayDivider + 6).toFixed(1)}" y="38" fill="#fb923c" font-size="9" font-weight="700" letter-spacing="0.5">NEXT 7 DAYS</text>
+      `;
+
+      // Calculate adaptive bar width based on number of days in view
+      const halfBarW = Math.max(1.5, Math.min(6, (stepWidth - 2) / 2.5));
+
+      // Render daily burn pile bars (Due vs Turned In side by side)
+      const barsMarkup = data.days.map((d, i) => {
+        const xCenter = chartLeft + (i + 0.5) * stepWidth;
+        let out = '';
+
+        if (d.dueCount > 0) {
+          const dueH = Math.max(3, (d.dueCount / maxBarVal) * barMaxH);
+          const yDue = chartBottom - dueH;
+          const gradId = d.isFuture ? `upcomingGrad_${student.id}` : `dueGrad_${student.id}`;
+          out += `<rect x="${(xCenter - halfBarW - 1).toFixed(1)}" y="${yDue.toFixed(1)}" width="${halfBarW.toFixed(1)}" height="${dueH.toFixed(1)}" fill="url(#${gradId})" rx="2"/>`;
+        }
+
+        if (d.turnedInCount > 0) {
+          const turnH = Math.max(3, (d.turnedInCount / maxBarVal) * barMaxH);
+          const yTurn = chartBottom - turnH;
+          out += `<rect x="${(xCenter + 1).toFixed(1)}" y="${yTurn.toFixed(1)}" width="${halfBarW.toFixed(1)}" height="${turnH.toFixed(1)}" fill="url(#turnGrad_${student.id})" rx="2"/>`;
+        }
+
+        return out;
+      }).join('');
+
+      // Render trendline points and terminal indicator at Today
+      const pointsMarkup = histPts.map((p, i) => {
+        if (!p.active && !p.isToday) return '';
+        if (p.isToday) {
+          return `
+            <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="5.5" fill="#38bdf8" stroke="#ffffff" stroke-width="2"/>
+            <text x="${p.x.toFixed(1)}" y="${(p.y - 9).toFixed(1)}" text-anchor="middle" fill="#38bdf8" font-size="11" font-weight="800">${p.net > 0 ? '+' : ''}${p.net}</text>
+          `;
+        }
+        return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.5" fill="#38bdf8" stroke="rgba(15,23,42,0.8)" stroke-width="1"/>`;
+      }).join('');
+
+      // Render start balance indicator at the left border of the chart
+      const startBadgeText = data.initialRunningNet > 0 ? `+${data.initialRunningNet}` : `${data.initialRunningNet}`;
+      const startBadgeColor = data.initialRunningNet > 0 ? '#34d399' : (data.initialRunningNet < 0 ? '#fb7185' : '#94a3b8');
+      const startMarker = `
+        <circle cx="${chartLeft.toFixed(1)}" cy="${yStart.toFixed(1)}" r="3.5" fill="${startBadgeColor}" stroke="#ffffff" stroke-width="1.5"/>
+        <text x="${(chartLeft - 6).toFixed(1)}" y="${(yStart + 3.5).toFixed(1)}" text-anchor="end" fill="${startBadgeColor}" font-size="9" font-weight="700">Start: ${startBadgeText}</text>
+      `;
+
+      // Calculate label spacing dynamically based on number of days
+      const labelInterval = totalDays <= 15 ? 2 : (totalDays <= 25 ? 3 : (totalDays <= 45 ? 5 : Math.ceil(totalDays / 8)));
+      // Keep interval labels clear of the pinned "Today" and last-day labels so they don't overlap
+      const labelGap = Math.max(2, Math.ceil(labelInterval / 2) + 1);
+      const dateLabels = data.days.map((d, i) => {
+        const xCenter = chartLeft + (i + 0.5) * stepWidth;
+        if (d.isToday) {
+          return `<text x="${xCenter.toFixed(1)}" y="222" text-anchor="middle" fill="#38bdf8" font-size="10.5" font-weight="800">Today</text>`;
+        }
+        const isLastDay = i === totalDays - 1;
+        const clearOfPinned = Math.abs(i - todayIndex) >= labelGap && (totalDays - 1 - i) >= labelGap;
+        if (isLastDay || (i % labelInterval === 0 && clearOfPinned)) {
+          return `<text x="${xCenter.toFixed(1)}" y="222" text-anchor="middle" fill="${d.isFuture ? '#fb923c' : '#94a3b8'}" font-size="9" font-weight="${d.isFuture ? '600' : '400'}">${d.displayDate}</text>`;
+        }
+        return '';
+      }).join('');
+
+      // Render hover sensor overlays for interactive tooltips
+      const hoverCols = data.days.map((d, i) => {
+        const xLeft = chartLeft + i * stepWidth;
+        return `<rect x="${xLeft.toFixed(1)}" y="0" width="${(stepWidth + 0.5).toFixed(1)}" height="240" fill="transparent" class="chart-col-hover" onmouseenter="showThroughputTooltip(event, '${student.id}', ${i})" onmouseleave="hideThroughputTooltip('${student.id}')"/>`;
+      }).join('');
+
+      return `
+        <svg class="throughput-svg" viewBox="0 0 960 250" preserveAspectRatio="none" onmouseleave="hideThroughputTooltip('${student.id}')">
+          <defs>
+            <linearGradient id="dueGrad_${student.id}" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#f43f5e"/>
+              <stop offset="100%" stop-color="#be123c"/>
+            </linearGradient>
+            <linearGradient id="upcomingGrad_${student.id}" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#fb923c"/>
+              <stop offset="100%" stop-color="#ea580c"/>
+            </linearGradient>
+            <linearGradient id="turnGrad_${student.id}" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#34d399"/>
+              <stop offset="100%" stop-color="#059669"/>
+            </linearGradient>
+            <linearGradient id="trendGrad_${student.id}" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stop-color="#38bdf8"/>
+              <stop offset="100%" stop-color="#ffffff"/>
+            </linearGradient>
+            <linearGradient id="areaGrad_${student.id}" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.22"/>
+              <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.02"/>
+            </linearGradient>
+            <filter id="glow_${student.id}" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="2.5" result="blur"/>
+              <feMerge>
+                <feMergeNode in="blur"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+          </defs>
+
+          <!-- Horizontal baseline and subtle gridlines -->
+          <line x1="${chartLeft}" y1="25" x2="${chartRight}" y2="25" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+          <line x1="${chartLeft}" y1="112" x2="${chartRight}" y2="112" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+          <line x1="${chartLeft}" y1="${chartBottom}" x2="${chartRight}" y2="${chartBottom}" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+
+          <!-- Weekend highlighted columns -->
+          ${weekendRects}
+
+          <!-- Upcoming future week backdrop -->
+          ${futureBackdrop}
+
+          <!-- Zero baseline for net trendline -->
+          <line x1="${chartLeft}" y1="${yZero.toFixed(1)}" x2="${xTodayDivider.toFixed(1)}" y2="${yZero.toFixed(1)}" stroke="#64748b" stroke-width="1.2" stroke-dasharray="4,4" opacity="0.8"/>
+          <text x="${chartRight + 6}" y="${(yZero + 3.5).toFixed(1)}" fill="#94a3b8" font-size="10" font-weight="600" font-family="Inter, sans-serif">0</text>
+
+          <!-- Daily Burn Pile Bars -->
+          ${barsMarkup}
+
+          <!-- Trendline Area Fill & Line (stops at Today) -->
+          <path d="${areaD}" fill="url(#areaGrad_${student.id})"/>
+          <path d="${pathD}" fill="none" stroke="url(#trendGrad_${student.id})" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow_${student.id})"/>
+
+          <!-- Start carryover indicator on left axis -->
+          ${startMarker}
+
+          <!-- Trendline Data Nodes -->
+          ${pointsMarkup}
+
+          <!-- Date Labels -->
+          ${dateLabels}
+
+          <!-- Interactive Hover Overlays -->
+          ${hoverCols}
+        </svg>
+      `;
+    }
+
+    // Generate full HTML content for student throughput card
+    function renderThroughputCardHtml(student, data) {
+      // Cache data for fast hover tooltip lookups
+      studentThroughputDataMap[student.id] = data;
+
+      // Build class filter chips based on active classes or selected semester
+      const relevantCourses = getRelevantCoursesForStudent(student);
+      const chipsHtml = [
+        `
+          <button class="class-chip ${data.selectedCourseId === 'all' ? 'active' : ''}" onclick="setThroughputCourse(${student.id}, 'all')">
+            All Classes (${relevantCourses.length})
+          </button>
+        `,
+        ...relevantCourses.map(c => `
+          <button class="class-chip ${String(data.selectedCourseId) === String(c.id) ? 'active' : ''}" onclick="setThroughputCourse(${student.id}, ${c.id})" title="${c.name}">
+            ${c.name.length > 24 ? c.name.slice(0, 22) + '...' : c.name}
+          </button>
+        `)
+      ].join('');
+
+      const svgContent = generateThroughputSvg(student, data);
+
+      const optionsOpen = !!(studentChartState[student.id] && studentChartState[student.id].optionsOpen);
+      const courseLabel = data.selectedCourseId === 'all'
+        ? 'All Classes'
+        : ((relevantCourses.find(c => String(c.id) === String(data.selectedCourseId)) || {}).name || 'Class');
+      const summaryText = `${data.timeframeLabel} &middot; ${data.mode === 'all' ? 'All Work' : 'Catch-Up Only'} &middot; ${escapeHtml(courseLabel)}`;
+
+      return `
+        <div class="chart-options-bar">
+          <button class="chart-options-toggle ${optionsOpen ? 'open' : ''}" onclick="toggleChartOptions(${student.id})" title="Show or hide chart options and stats">
+            <span class="chev">&#9656;</span>
+            <span>Chart options &amp; stats</span>
+            <span class="chart-options-summary">${summaryText}</span>
+          </button>
+          <span class="chart-status-pill ${data.statusClass}" title="${escapeHtml(data.missingMismatchNote || 'Matches Canvas missing list')}">${data.statusLabel}${data.missingMismatchNote ? ' &#9888;' : ''}</span>
+        </div>
+
+        <div class="chart-options-body ${optionsOpen ? 'open' : ''}" id="chartOptions_${student.id}">
+        <div class="throughput-header">
+          <div class="throughput-title-group">
+            <div class="throughput-badge-row">
+              <span class="throughput-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <line x1="18" y1="20" x2="18" y2="10"></line>
+                  <line x1="12" y1="20" x2="12" y2="4"></line>
+                  <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+                ${data.timeframeLabel} Throughput &amp; Backlog Velocity
+              </span>
+            </div>
+            <div class="throughput-subtitle">${data.statusSummary}</div>
+            ${data.missingMismatchNote ? `<div class="throughput-subtitle" style="color:#fbbf24;">&#9888; ${escapeHtml(data.missingMismatchNote)} Some items may be marked or cleared by hand in Canvas.</div>` : ''}
+          </div>
+
+          <div class="throughput-controls">
+            <!-- Timeframe selector -->
+            <div class="timeframe-toggle-group">
+              <button class="timeframe-btn ${data.timeframe === 'semester' ? 'active' : ''}" onclick="setThroughputTimeframe(${student.id}, 'semester')" title="View burn rate across the entire semester">
+                Full Semester
+              </button>
+              <button class="timeframe-btn ${data.timeframe === '30' ? 'active' : ''}" onclick="setThroughputTimeframe(${student.id}, '30')" title="View burn rate for the last 30 days">
+                30 Days
+              </button>
+              <button class="timeframe-btn ${data.timeframe === '14' ? 'active' : ''}" onclick="setThroughputTimeframe(${student.id}, '14')" title="View burn rate for the last 14 days">
+                14 Days
+              </button>
+              <button class="timeframe-btn ${data.timeframe === '7' ? 'active' : ''}" onclick="setThroughputTimeframe(${student.id}, '7')" title="View burn rate for the last 7 days">
+                7 Days
+              </button>
+            </div>
+
+            <!-- Mode selector -->
+            <div class="mode-toggle-group">
+              <button class="mode-btn ${data.mode === 'all' ? 'active' : ''}" onclick="setThroughputMode(${student.id}, 'all')" title="Count all online assignments due vs all completed">
+                All Work
+              </button>
+              <button class="mode-btn ${data.mode === 'catchup' ? 'active' : ''}" onclick="setThroughputMode(${student.id}, 'catchup')" title="Count newly overdue work vs late catch-up turn-ins">
+                Catch-Up Only
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="throughput-class-chips">
+          ${chipsHtml}
+        </div>
+
+        <div class="throughput-stats-strip">
+          <div class="t-stat-item" title="Missing items entering this window (shown as a negative)">
+            <span class="t-stat-label">Start Balance</span>
+            <span class="t-stat-val ${data.initialRunningNet > 0 ? 'val-good' : (data.initialRunningNet < 0 ? 'val-warn' : 'val-neutral')}">
+              ${data.initialRunningNet > 0 ? `+${data.initialRunningNet}` : data.initialRunningNet}
+            </span>
+          </div>
+          <div class="t-stat-item">
+            <span class="t-stat-label">Turned In (${data.shortTfLabel})</span>
+            <span class="t-stat-val val-good">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              ${data.totalTurnedIn}
+            </span>
+          </div>
+          <div class="t-stat-item">
+            <span class="t-stat-label">Due (${data.shortTfLabel})</span>
+            <span class="t-stat-val val-warn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              ${data.totalDue}
+            </span>
+          </div>
+          <div class="t-stat-item" title="Change in missing count over this window (positive = fewer missing)">
+            <span class="t-stat-label">Window Net (${data.shortTfLabel})</span>
+            <span class="t-stat-val ${data.windowNetDelta >= 0 ? 'val-good' : 'val-warn'}">
+              ${data.windowNetDelta > 0 ? `+${data.windowNetDelta}` : data.windowNetDelta}
+            </span>
+          </div>
+          <div class="t-stat-item" title="Missing items right now (shown as a negative)">
+            <span class="t-stat-label">Current Balance</span>
+            <span class="t-stat-val ${data.currentNetBalance >= 0 ? 'val-good' : 'val-warn'}">
+              ${data.currentNetBalance > 0 ? `+${data.currentNetBalance}` : data.currentNetBalance}
+            </span>
+          </div>
+          <div class="t-stat-item">
+            <span class="t-stat-label">Upcoming Due (7d)</span>
+            <span class="t-stat-val val-upcoming">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+              ${data.totalUpcomingDue}
+            </span>
+          </div>
+          <div class="t-stat-item">
+            <span class="t-stat-label">Throughput Pace</span>
+            <span class="t-stat-val val-neutral">
+              ${data.paceRatio}x
+            </span>
+          </div>
+        </div>
+
+        <div class="throughput-legend">
+          <div class="t-legend-item">
+            <span class="legend-swatch legend-swatch-turned-in"></span>
+            <span>Turned In (Outflow)</span>
+          </div>
+          <div class="t-legend-item">
+            <span class="legend-swatch legend-swatch-due"></span>
+            <span>${data.mode === 'all' ? 'Due Date (Inflow)' : 'Newly Overdue (Inflow)'}</span>
+          </div>
+          <div class="t-legend-item">
+            <span class="legend-swatch legend-swatch-upcoming"></span>
+            <span>Upcoming Due (Next 7 Days)</span>
+          </div>
+          <div class="t-legend-item">
+            <span class="legend-swatch-line"></span>
+            <span>Missing Work Over Time (Start: ${data.initialRunningNet})</span>
+          </div>
+        </div>
+        </div>
+
+        <div class="throughput-chart-wrapper" id="chartWrapper_${student.id}" onscroll="hideThroughputTooltip('${student.id}')">
+          ${svgContent}
+        </div>
+        <div class="throughput-tooltip" id="throughputTooltip_${student.id}"></div>
+      `;
+    }
+
+    // Update specific student throughput card in DOM
+    function updateStudentThroughputCard(studentId) {
+      const student = cachedStudentsData.find(s => s.id == studentId);
+      if (!student) return;
+
+      const container = document.getElementById(`throughputContainer_${studentId}`);
+      if (!container) return;
+
+      if (!studentChartState[studentId]) {
+        studentChartState[studentId] = { selectedCourseId: 'all', mode: 'all', timeframe: '30' };
+      }
+
+      const state = studentChartState[studentId];
+      const data = calculateThroughputData(student, state.selectedCourseId, state.mode, state.timeframe || '30');
+      container.innerHTML = renderThroughputCardHtml(student, data);
+    }
+
+    // Expand/collapse the per-student chart options section (state survives chart re-renders)
+    function toggleChartOptions(studentId) {
+      if (!studentChartState[studentId]) {
+        studentChartState[studentId] = { selectedCourseId: 'all', mode: 'all', timeframe: '30' };
+      }
+      const st = studentChartState[studentId];
+      st.optionsOpen = !st.optionsOpen;
+      const body = document.getElementById(`chartOptions_${studentId}`);
+      if (body) {
+        body.classList.toggle('open', st.optionsOpen);
+        const btn = body.parentElement.querySelector('.chart-options-toggle');
+        if (btn) btn.classList.toggle('open', st.optionsOpen);
+      }
+    }
+
+    // Update selected course filter and refresh chart
+    function setThroughputCourse(studentId, courseId) {
+      if (!studentChartState[studentId]) {
+        studentChartState[studentId] = { selectedCourseId: 'all', mode: 'all', timeframe: '30' };
+      }
+      studentChartState[studentId].selectedCourseId = courseId;
+      updateStudentThroughputCard(studentId);
+    }
+
+    // Update active throughput mode and refresh chart
+    function setThroughputMode(studentId, mode) {
+      if (!studentChartState[studentId]) {
+        studentChartState[studentId] = { selectedCourseId: 'all', mode: 'all', timeframe: '30' };
+      }
+      studentChartState[studentId].mode = mode;
+      updateStudentThroughputCard(studentId);
+    }
+
+    // Update active timeframe filter and refresh chart
+    function setThroughputTimeframe(studentId, timeframe) {
+      if (!studentChartState[studentId]) {
+        studentChartState[studentId] = { selectedCourseId: 'all', mode: 'all', timeframe: '30' };
+      }
+      studentChartState[studentId].timeframe = timeframe;
+      updateStudentThroughputCard(studentId);
+    }
+
+    // Sanitize text values for safe DOM interpolation
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // Display floating interactive tooltip over chart column
+    function showThroughputTooltip(evt, studentId, dayIndex) {
+      const data = studentThroughputDataMap[studentId];
+      if (!data || !data.days[dayIndex]) return;
+
+      const day = data.days[dayIndex];
+      const tooltip = document.getElementById(`throughputTooltip_${studentId}`);
+      const wrapper = document.getElementById(`chartWrapper_${studentId}`);
+      const card = document.getElementById(`throughputContainer_${studentId}`);
+      if (!tooltip || !wrapper || !card) return;
+
+      if (day.isFuture) {
+        let itemsHtml = '';
+        if (day.dueItems.length > 0) {
+          itemsHtml += `<div style="color:#fb923c; font-weight:600; margin-top:5px;">&#128197; Upcoming Due (${day.dueItems.length}):</div>`;
+          const showCount = Math.min(day.dueItems.length, 5);
+          day.dueItems.slice(0, showCount).forEach(item => {
+            itemsHtml += `<div class="t-tooltip-item-line">&bull; ${escapeHtml(item.name)} <span style="color:var(--text-faint);">(${escapeHtml(item.courseName.split(' ')[0])})</span></div>`;
+          });
+          if (day.dueItems.length > showCount) {
+            itemsHtml += `<div style="font-style:italic; font-size:10px; color:var(--text-faint); margin-left:6px;">+${day.dueItems.length - showCount} more</div>`;
+          }
+        }
+
+        tooltip.innerHTML = `
+          <div class="t-tooltip-header">
+            <span>${day.fullDate}</span>
+            <span style="color:#fb923c; font-weight:700;">Upcoming</span>
+          </div>
+          <div class="t-tooltip-row">
+            <span>Upcoming Due:</span>
+            <strong style="color:#fb923c;">${day.dueCount}</strong>
+          </div>
+          ${itemsHtml ? `<div class="t-tooltip-items">${itemsHtml}</div>` : '<div style="font-size:11px; color:var(--text-muted); margin-top:4px;">No assignments scheduled due.</div>'}
+        `;
+      } else {
+        const netText = day.netDelta > 0 ? `+${day.netDelta} (Catching up)` : (day.netDelta < 0 ? `${day.netDelta} (Falling behind)` : '0 (No change)');
+        const cumText = day.cumulativeNet < 0 ? `${-day.cumulativeNet} missing` : 'None missing';
+
+        let itemsHtml = '';
+        if (day.turnedInItems.length > 0) {
+          itemsHtml += `<div style="color:#34d399; font-weight:600; margin-top:4px;">&#10003; Turned In (${day.turnedInItems.length}):</div>`;
+          const showCount = Math.min(day.turnedInItems.length, 5);
+          day.turnedInItems.slice(0, showCount).forEach(item => {
+            itemsHtml += `<div class="t-tooltip-item-line">&bull; ${escapeHtml(item.name)} <span style="color:var(--text-faint);">(${escapeHtml(item.courseName.split(' ')[0])})</span></div>`;
+          });
+          if (day.turnedInItems.length > showCount) {
+            itemsHtml += `<div style="font-style:italic; font-size:10px; color:var(--text-faint); margin-left:6px;">+${day.turnedInItems.length - showCount} more</div>`;
+          }
+        }
+
+        if (day.dueItems.length > 0) {
+          itemsHtml += `<div style="color:#fb7185; font-weight:600; margin-top:5px;">&#9888; Due (${day.dueItems.length}):</div>`;
+          const showCount = Math.min(day.dueItems.length, 5);
+          day.dueItems.slice(0, showCount).forEach(item => {
+            itemsHtml += `<div class="t-tooltip-item-line">&bull; ${escapeHtml(item.name)} <span style="color:var(--text-faint);">(${escapeHtml(item.courseName.split(' ')[0])})</span></div>`;
+          });
+          if (day.dueItems.length > showCount) {
+            itemsHtml += `<div style="font-style:italic; font-size:10px; color:var(--text-faint); margin-left:6px;">+${day.dueItems.length - showCount} more</div>`;
+          }
+        }
+
+        tooltip.innerHTML = `
+          <div class="t-tooltip-header">
+            <span>${day.fullDate}</span>
+            <span style="color:#38bdf8;">${day.isToday ? 'Today' : ''}</span>
+          </div>
+          <div class="t-tooltip-row">
+            <span>Turned In:</span>
+            <strong style="color:#34d399;">${day.turnedInCount}</strong>
+          </div>
+          <div class="t-tooltip-row">
+            <span>Due:</span>
+            <strong style="color:#fb7185;">${day.dueCount}</strong>
+          </div>
+          <div class="t-tooltip-row">
+            <span>Missing Change:</span>
+            <strong>${netText}</strong>
+          </div>
+          ${data.initialRunningNet !== 0 ? `
+          <div class="t-tooltip-row" style="font-size:11px; color:var(--text-faint);">
+            <span>Missing at Window Start:</span>
+            <strong>${-data.initialRunningNet}</strong>
+          </div>` : ''}
+          <div class="t-tooltip-row" style="border-top:1px dashed var(--border-subtle); padding-top:4px; margin-top:4px;">
+            <span>Missing at End of Day:</span>
+            <strong style="color:#38bdf8;">${cumText}</strong>
+          </div>
+          ${itemsHtml ? `<div class="t-tooltip-items">${itemsHtml}</div>` : ''}
+        `;
+      }
+
+      // Measure tooltip dimensions while momentarily keeping it hidden
+      tooltip.style.visibility = 'hidden';
+      tooltip.style.display = 'block';
+
+      const tooltipWidth = tooltip.offsetWidth || 300;
+      const tooltipHeight = tooltip.offsetHeight || 160;
+
+      // Calculate relative horizontal and vertical positions within student throughput card
+      const rect = evt.target.getBoundingClientRect();
+      const cardRect = card.getBoundingClientRect();
+      const wrapRect = wrapper.getBoundingClientRect();
+
+      // Horizontally center tooltip over column with safety bounds against card edges
+      const cardWidth = cardRect.width;
+      let xPos = rect.left - cardRect.left + (rect.width / 2);
+      const minLeft = (tooltipWidth / 2) + 12;
+      const maxLeft = cardWidth - (tooltipWidth / 2) - 12;
+      if (cardWidth > tooltipWidth + 24) {
+        xPos = Math.max(minLeft, Math.min(maxLeft, xPos));
+      }
+
+      // Position vertically above trendline, ensuring it stays fully within view without clipping
+      const wrapperTopInCard = wrapRect.top - cardRect.top;
+      let yPos = wrapperTopInCard + 70;
+      if (yPos - tooltipHeight < 8) {
+        yPos = tooltipHeight + 8;
+      }
+
+      tooltip.style.left = `${xPos}px`;
+      tooltip.style.top = `${yPos}px`;
+      tooltip.style.visibility = 'visible';
+    }
+
+    // Hide floating interactive tooltip
+    function hideThroughputTooltip(studentId) {
+      const tooltip = document.getElementById(`throughputTooltip_${studentId}`);
+      if (tooltip) {
+        tooltip.style.display = 'none';
+      }
+    }
+  </script>
+</body>
+</html>
