@@ -177,14 +177,60 @@
     </main>
   </div>
 
+  <!-- Teacher Feedback and Submission Comments Modal Dialog -->
+  <div id="commentModal" class="modal-backdrop" style="display:none;" onclick="handleModalBackdropClick(event)">
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="commentModalTitle">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <div class="modal-icon-badge">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+            </svg>
+          </div>
+          <div>
+            <h3 id="commentModalTitle" class="modal-title">Teacher Feedback</h3>
+            <div id="commentModalSubtitle" class="modal-subtitle">Course &bull; Student</div>
+          </div>
+        </div>
+        <button type="button" class="modal-close-btn" onclick="closeCommentModal()" aria-label="Close dialog">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Assignment summary banner -->
+        <div class="modal-assign-banner">
+          <div id="commentModalAssignName" class="modal-assign-name">Assignment Name</div>
+          <div id="commentModalAssignMeta" class="modal-assign-meta">Turned In</div>
+        </div>
+
+        <!-- Comments container -->
+        <div class="modal-comments-heading">Teacher Comments &amp; Submission Feedback</div>
+        <div id="commentModalList" class="modal-comments-list">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <a id="commentModalCanvasLink" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-secondary modal-canvas-btn">
+          Open in Canvas
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <line x1="10" y1="14" x2="21" y2="3"></line>
+          </svg>
+        </a>
+        <button type="button" class="btn btn-primary" onclick="closeCommentModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Footer displaying required version constant -->
   <footer class="dashboard-footer">
-    <span>Canvas Grade Monitor v<span id="versionText">2.8</span> &bull; Synchronized via Local Proxy</span>
+    <span>Canvas Grade Monitor v<span id="versionText">3.0</span> &bull; Synchronized via Local Proxy</span>
   </footer>
 
   <script>
     // Version constant for frontend display and verification
-    const VERSION = "2.8";
+    const VERSION = "3.0";
     document.getElementById('versionText').innerText = VERSION;
 
     // Cache of dashboard data for fast client-side filtering
@@ -201,6 +247,43 @@
       }
       const offlineTypes = new Set(['none', 'on_paper', 'not_graded', 'wiki_page']);
       return submissionTypes.some(t => !offlineTypes.has(t));
+    }
+
+    // Retrieve sanitized Canvas LMS base URL from configuration or persistent storage
+    function getCanvasBaseUrl() {
+      const input = document.getElementById('canvasUrl');
+      const inputVal = input ? input.value.trim() : '';
+      const savedVal = localStorage.getItem('canvas_base_url');
+      const baseUrl = inputVal || savedVal || 'https://shakopee.instructure.com/';
+      return baseUrl.replace(/\/+$/, '');
+    }
+
+    // Construct deep link to a specific Canvas course page
+    function buildCanvasCourseUrl(courseId) {
+      if (!courseId) return '#';
+      const cleanBase = getCanvasBaseUrl();
+      return `${cleanBase}/courses/${encodeURIComponent(courseId)}`;
+    }
+
+    // Construct deep link to a specific Canvas assignment page
+    function buildCanvasAssignmentUrl(courseId, assignmentId, rawHtmlUrl) {
+      // Direct absolute URL returned from Canvas API
+      if (rawHtmlUrl && (rawHtmlUrl.startsWith('http://') || rawHtmlUrl.startsWith('https://'))) {
+        return rawHtmlUrl;
+      }
+      const cleanBase = getCanvasBaseUrl();
+      // Relative path returned from Canvas API
+      if (rawHtmlUrl && rawHtmlUrl.startsWith('/')) {
+        return `${cleanBase}${rawHtmlUrl}`;
+      }
+      // Canonical Canvas assignment URL fallback
+      if (courseId && assignmentId) {
+        return `${cleanBase}/courses/${encodeURIComponent(courseId)}/assignments/${encodeURIComponent(assignmentId)}`;
+      }
+      if (courseId) {
+        return `${cleanBase}/courses/${encodeURIComponent(courseId)}`;
+      }
+      return '#';
     }
 
     // Initialize application settings on DOM ready
@@ -710,9 +793,25 @@
 
           const lateness = getLatenessInfo(rawDueAt, rawSubAt, isLate);
 
+          // Extract submission comments and isolate teacher feedback
+          const rawComments = Array.isArray(s.submission_comments) ? s.submission_comments : [];
+          const commentsList = rawComments
+            .filter(c => c && c.comment && typeof c.comment === 'string' && c.comment.trim().length > 0)
+            .map(c => ({
+              id: c.id,
+              authorId: c.author_id,
+              authorName: c.author_name || 'Teacher / Grader',
+              comment: c.comment.trim(),
+              createdAt: c.created_at,
+              isTeacher: !student.id || String(c.author_id) !== String(student.id)
+            }));
+          const teacherComments = commentsList.filter(c => c.isTeacher);
+
           resolvedItems.push({
             id: s.assignment_id,
+            courseId: course.id,
             name: (s.assignment && s.assignment.name) ? s.assignment.name : `Assignment ${s.assignment_id}`,
+            htmlUrl: (s.assignment && s.assignment.html_url) ? s.assignment.html_url : (s.html_url || null),
             dueAt: rawDueAt ? new Date(rawDueAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'No due date',
             rawDueAt: rawDueAt,
             submittedAt: rawSubAt ? formatDateTime(rawSubAt) : (s.workflow_state === 'graded' ? 'Graded' : 'Turned In'),
@@ -723,7 +822,10 @@
             pointsPossible: s.assignment ? s.assignment.points_possible : null,
             score: s.score ?? null,
             grade: s.grade ?? null,
-            workflowState: s.workflow_state
+            workflowState: s.workflow_state,
+            comments: commentsList,
+            teacherComments: teacherComments,
+            hasTeacherComment: teacherComments.length > 0
           });
         }
       }
@@ -997,7 +1099,9 @@
 
                   missingByCourse[cId].push({
                     id: item.id,
+                    courseId: cId,
                     name: item.name,
+                    htmlUrl: item.html_url || null,
                     dueAt: item.due_at ? new Date(item.due_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'No due date',
                     rawDueAt: item.due_at || null,
                     pointsPossible: item.points_possible,
@@ -1019,7 +1123,7 @@
 
           await Promise.allSettled(coursesForSubmissions.map(async course => {
             try {
-              const subEndpoint = `/api/v1/courses/${course.id}/students/submissions?student_ids[]=${student.id}&per_page=100&include[]=assignment`;
+              const subEndpoint = `/api/v1/courses/${course.id}/students/submissions?student_ids[]=${student.id}&per_page=100&include[]=assignment&include[]=submission_comments`;
               const subs = await apiCallAllPages(subEndpoint, baseUrl, token);
               if (Array.isArray(subs)) {
                 submissionsByCourse[course.id] = subs;
@@ -1045,6 +1149,7 @@
                   courseId: course.id,
                   assignmentId: m.id,
                   name: m.name,
+                  htmlUrl: m.htmlUrl || null,
                   dueAt: m.dueAt,
                   rawDueAt: m.rawDueAt,
                   firstSeenMissing: new Date().toISOString(),
@@ -1055,6 +1160,7 @@
                 m.isNew = false;
                 prevRecord.lastSeenMissing = new Date().toISOString();
                 prevRecord.status = 'missing';
+                if (m.htmlUrl) prevRecord.htmlUrl = m.htmlUrl;
               }
             }
 
@@ -1253,16 +1359,20 @@
         } else {
           coursesCardsHtml = filteredCourses.map(course => {
             const gradeInfo = getGradeDetails(course.grade, course.score);
+            const courseUrl = buildCanvasCourseUrl(course.id);
 
             let missingWorkHtml = '';
             if (course.missingWork.length > 0) {
               const listItems = course.missingWork.map(m => {
                 const urgency = getMissingUrgency(m.rawDueAt);
                 const isPaper = m.submissionTypes && m.submissionTypes.length > 0 && m.submissionTypes.every(t => ['on_paper', 'none'].includes(t));
+                const assignUrl = buildCanvasAssignmentUrl(course.id, m.id, m.htmlUrl);
                 return `
                   <li class="missing-item ${urgency.itemClass}">
                     <div class="missing-item-header">
-                      <span class="missing-title">&bull; ${m.name}${m.isNew ? ' <span class="badge-mini badge-mini-new" style="margin-left:4px; font-size:9.5px; padding:1px 6px;">New Late</span>' : ''}${isPaper ? ' <span class="badge-mini" style="margin-left:4px; font-size:9.5px; padding:1px 6px; background:rgba(245,158,11,0.15); color:#fbbf24; border:1px solid rgba(245,158,11,0.3); border-radius:4px;">Paper Assignment</span>' : ''}</span>
+                      <span class="missing-title">
+                        <a href="${assignUrl}" target="_blank" rel="noopener noreferrer" class="assignment-link" title="Open assignment in Canvas (opens in new tab)">&bull; ${escapeHtml(m.name)}<svg class="external-link-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>${m.isNew ? ' <span class="badge-mini badge-mini-new" style="margin-left:4px; font-size:9.5px; padding:1px 6px;">New Late</span>' : ''}${isPaper ? ' <span class="badge-mini" style="margin-left:4px; font-size:9.5px; padding:1px 6px; background:rgba(245,158,11,0.15); color:#fbbf24; border:1px solid rgba(245,158,11,0.3); border-radius:4px;">Paper Assignment</span>' : ''}
+                      </span>
                       <span class="urgency-tag">${urgency.tagHtml}</span>
                     </div>
                     <span class="missing-due">Due: ${m.dueAt}${m.pointsPossible ? ` &bull; ${m.pointsPossible} pts` : ''}</span>
@@ -1306,12 +1416,24 @@
                 const lateness = r.lateness || getLatenessInfo(r.rawDueAt, r.rawSubmittedAt, r.isLate);
                 const itemCss = lateness.cssClass || 'resolved-item-ontime';
                 const tagCss = lateness.tagClass || 'resolved-tag-ontime';
+                const assignUrl = buildCanvasAssignmentUrl(course.id, r.id, r.htmlUrl);
+                const hasTeacherComments = r.teacherComments && r.teacherComments.length > 0;
 
                 return `
                   <li class="resolved-item ${itemCss}">
                     <div class="resolved-item-header">
-                      <span class="resolved-title">&#10003; ${r.name}</span>
+                      <span class="resolved-title">
+                        <a href="${assignUrl}" target="_blank" rel="noopener noreferrer" class="assignment-link" title="Open assignment in Canvas (opens in new tab)">&#10003; ${escapeHtml(r.name)}<svg class="external-link-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>
+                      </span>
                       <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+                        ${hasTeacherComments ? `
+                          <button type="button" class="comment-bubble-btn" onclick="openCommentModal('${student.id}', '${course.id}', '${r.id}', event)" title="View Teacher Feedback (${r.teacherComments.length} note${r.teacherComments.length > 1 ? 's' : ''})" aria-label="View Teacher Feedback">
+                            <svg class="comment-bubble-icon" width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+                            </svg>
+                            ${r.teacherComments.length > 1 ? `<span class="comment-bubble-count">${r.teacherComments.length}</span>` : ''}
+                          </button>
+                        ` : ''}
                         <span class="resolved-lateness-tag ${tagCss}">${lateness.label}</span>
                         <span class="resolved-status-tag">${r.grade !== null && r.grade !== undefined ? `Graded: ${r.grade}${r.pointsPossible ? `/${r.pointsPossible}` : ''}` : 'Submitted'}</span>
                       </div>
@@ -1319,6 +1441,11 @@
                     <div class="resolved-meta-row">
                       <span class="resolved-timestamp">&#128337; Turned in: ${r.submittedAt}</span>
                       <span style="color:var(--text-faint);">&bull; Due: ${r.dueAt}</span>
+                      ${hasTeacherComments ? `
+                        <span class="resolved-comment-preview" onclick="openCommentModal('${student.id}', '${course.id}', '${r.id}', event)" title="Click to view teacher feedback">
+                          &bull; <span style="color:#38bdf8;">&#128172; "${escapeHtml(r.teacherComments[0].comment.slice(0, 50))}${r.teacherComments[0].comment.length > 50 ? '...' : ''}"</span>
+                        </span>
+                      ` : ''}
                     </div>
                   </li>
                 `;
@@ -1355,7 +1482,12 @@
                         ${course.isActive ? 'Active' : 'Concluded'}
                       </span>
                     </div>
-                    <h3 class="course-title">${course.name}</h3>
+                    <h3 class="course-title">
+                      <a href="${courseUrl}" target="_blank" rel="noopener noreferrer" class="course-link" title="Open course in Canvas (opens in new tab)">
+                        ${escapeHtml(course.name)}
+                        <svg class="external-link-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                      </a>
+                    </h3>
                     <div class="course-code">${course.courseCode || `ID: ${course.id}`}</div>
                     <div class="course-badges-row">
                       ${course.missingWork.length > 0 ? `<span class="badge-mini badge-mini-warn">${course.missingWork.length} Overdue</span>` : `<span class="badge-mini badge-mini-success">0 Overdue</span>`}
@@ -1514,6 +1646,12 @@
                           <span class="print-assign-dots"></span>
                           <span class="print-assign-due" style="color:${lateColor}; font-weight:${lateness.status !== 'ontime' ? '600' : 'normal'};">Turned in: ${r.submittedAt} &bull; ${lateness.label}${r.grade ? ` &bull; Grade: ${r.grade}` : ''}</span>
                         </div>
+                        ${r.teacherComments && r.teacherComments.length > 0 ? `
+                          <div class="print-comment-row">
+                            <span class="print-comment-icon">&#128172;</span>
+                            <span class="print-comment-text"><strong>Teacher Feedback (${escapeHtml(r.teacherComments[0].authorName)}):</strong> "${escapeHtml(r.teacherComments[0].comment)}"</span>
+                          </div>
+                        ` : ''}
                       `;
                     }).join('')}
                   </div>
@@ -1539,16 +1677,18 @@
 
         studentSection.dataset.studentId = student.id;
         studentSection.innerHTML = `
-          <!-- Print-only header displayed at top of each student's page -->
+          <!-- Print-only header displayed at top of each student's page with prominent student name -->
           <div class="print-report-header" style="display:none;">
             <div class="print-report-top">
-              <div class="print-report-title">Academic Progress &amp; Missing Work Report</div>
+              <div class="print-student-headline">
+                <h1 class="print-student-name">${escapeHtml(student.name)}</h1>
+                <div class="print-student-sub">Academic Progress &amp; Missing Work Report &bull; Student ID: ${student.id}</div>
+              </div>
               <div class="print-report-badge ${studentMissing > 0 ? 'badge-warn' : 'badge-ok'}">
                 ${studentMissing > 0 ? `${studentMissing} MISSING ASSIGNMENT${studentMissing > 1 ? 'S' : ''}` : 'ALL WORK CAUGHT UP'}
               </div>
             </div>
             <div class="print-report-meta">
-              <span>Student: <strong>${student.name}</strong> &bull; ID: ${student.id}</span>
               <span>Institution: Shakopee Canvas LMS</span>
               <span>Generated: ${new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
               <span>Classes: ${filteredCourses.length} ${filteredCourses.length === student.courses.length ? 'Enrolled' : `Displayed (${student.courses.length} Total Enrolled)`}</span>
@@ -1657,7 +1797,7 @@
         const overdueHistory = getOverdueHistory();
         await Promise.allSettled(pendingCourses.map(async ({ student, course }) => {
           try {
-            const subEndpoint = `/api/v1/courses/${course.id}/students/submissions?student_ids[]=${student.id}&per_page=100&include[]=assignment`;
+            const subEndpoint = `/api/v1/courses/${course.id}/students/submissions?student_ids[]=${student.id}&per_page=100&include[]=assignment&include[]=submission_comments`;
             const subs = await apiCallAllPages(subEndpoint, baseUrl, token);
             if (Array.isArray(subs)) {
               attachSubmissionsToCourse(student, course, subs, overdueHistory);
@@ -1720,6 +1860,111 @@
       // Open browser print preview
       window.print();
     }
+
+    // Open teacher comments modal dialog for a specific turned-in assignment
+    function openCommentModal(studentId, courseId, assignmentId, event) {
+      if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+      }
+
+      // Locate matching student in cached records
+      const student = (cachedStudentsData || []).find(s => String(s.id) === String(studentId));
+      if (!student) return;
+
+      // Locate matching course
+      const course = (student.courses || []).find(c => String(c.id) === String(courseId));
+      if (!course) return;
+
+      // Locate matching resolved assignment item
+      const resolvedItem = (course.resolvedLateWork || []).find(r => String(r.id) === String(assignmentId));
+      if (!resolvedItem) return;
+
+      const modal = document.getElementById('commentModal');
+      if (!modal) return;
+
+      // Populate modal dialog titles and contextual metadata
+      document.getElementById('commentModalSubtitle').innerText = `${course.name} • ${student.name}`;
+      document.getElementById('commentModalAssignName').innerText = resolvedItem.name;
+
+      const lateness = resolvedItem.lateness || getLatenessInfo(resolvedItem.rawDueAt, resolvedItem.rawSubmittedAt, resolvedItem.isLate);
+      const gradeText = resolvedItem.grade !== null && resolvedItem.grade !== undefined 
+        ? `Grade: ${resolvedItem.grade}${resolvedItem.pointsPossible ? `/${resolvedItem.pointsPossible}` : ''}` 
+        : 'Status: Submitted';
+      const metaText = `${gradeText} • Turned in: ${resolvedItem.submittedAt} • ${lateness.label}`;
+      document.getElementById('commentModalAssignMeta').innerText = metaText;
+
+      // Set Canvas assignment URL deep link
+      const canvasLink = document.getElementById('commentModalCanvasLink');
+      if (canvasLink) {
+        canvasLink.href = buildCanvasAssignmentUrl(course.id, resolvedItem.id, resolvedItem.htmlUrl);
+      }
+
+      // Populate list of submission comments
+      const listContainer = document.getElementById('commentModalList');
+      const commentsToDisplay = (resolvedItem.comments && resolvedItem.comments.length > 0)
+        ? resolvedItem.comments
+        : (resolvedItem.teacherComments || []);
+
+      if (commentsToDisplay.length === 0) {
+        listContainer.innerHTML = `
+          <div style="text-align:center; padding:24px; color:var(--text-muted); font-size:13px;">
+            No teacher comments recorded for this assignment submission.
+          </div>
+        `;
+      } else {
+        listContainer.innerHTML = commentsToDisplay.map(c => {
+          const isTeacher = c.isTeacher !== false;
+          const roleBadge = isTeacher
+            ? '<span class="comment-author-role role-teacher">Teacher / Grader</span>'
+            : '<span class="comment-author-role role-student">Student</span>';
+          const roleBorderClass = isTeacher ? 'teacher-border' : 'student-border';
+          const formattedDate = c.createdAt ? formatDateTime(c.createdAt) : '';
+
+          return `
+            <div class="comment-card ${roleBorderClass}">
+              <div class="comment-header">
+                <div class="comment-author-wrap">
+                  <div class="comment-avatar ${isTeacher ? 'avatar-teacher' : 'avatar-student'}">
+                    ${isTeacher ? '&#9998;' : '&#128100;'}
+                  </div>
+                  <span class="comment-author-name">${escapeHtml(c.authorName)}</span>
+                  ${roleBadge}
+                </div>
+                ${formattedDate ? `<span class="comment-date">${formattedDate}</span>` : ''}
+              </div>
+              <div class="comment-text">${escapeHtml(c.comment)}</div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      modal.style.display = 'flex';
+      document.body.style.overflow = 'hidden';
+    }
+
+    // Dismiss teacher comments modal dialog and restore page scroll
+    function closeCommentModal() {
+      const modal = document.getElementById('commentModal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+      document.body.style.overflow = '';
+    }
+
+    // Dismiss modal when backdrop clicked outside dialog container
+    function handleModalBackdropClick(event) {
+      if (event.target && event.target.id === 'commentModal') {
+        closeCommentModal();
+      }
+    }
+
+    // Listen for Escape key to dismiss open modal dialog
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeCommentModal();
+      }
+    });
 
     // Storage for student chart filter, mode, and timeframe configurations (keyed by student ID)
     const studentChartState = {};

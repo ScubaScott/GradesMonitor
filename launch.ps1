@@ -1,5 +1,5 @@
 # Version identifier for the Grade Monitor launcher script
-$VERSION = "2.8"
+$VERSION = "3.0"
 
 # Define the root directory of the application
 $projectDir = Split-Path -Parent $MyInvocation.MyCommand.Path

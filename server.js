@@ -1,5 +1,5 @@
 // Version identifier for server and API sync
-const VERSION = '2.8';
+const VERSION = '3.0';
 
 const express = require('express');
 const cors = require('cors');
