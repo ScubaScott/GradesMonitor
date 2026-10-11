@@ -457,13 +457,30 @@
 
     /* Student Section Block */
     .student-block {
-  border-top: 3px solid var(--primary);
+      border-top: 3px solid var(--primary);
       background: var(--bg-secondary);
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-lg);
       padding: 24px;
       margin-bottom: 32px;
       box-shadow: var(--card-shadow);
+      transition: padding 0.2s ease, margin-bottom 0.2s ease;
+    }
+
+    /* Collapsed state displaying compact card with header and counts only */
+    .student-block.collapsed {
+      padding-bottom: 20px;
+      margin-bottom: 16px;
+    }
+
+    .student-block.collapsed .student-header {
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+
+    .student-block.collapsed .student-body {
+      display: none !important;
     }
 
     .student-header {
@@ -475,6 +492,54 @@
       margin-bottom: 22px;
       padding-bottom: 16px;
       border-bottom: 1px solid var(--border-subtle);
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s ease, border-color 0.15s ease;
+      border-radius: var(--radius-sm);
+    }
+
+    .student-header:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .student-header:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 4px;
+    }
+
+    .student-collapse-btn {
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .student-collapse-btn:hover {
+      background: rgba(200, 16, 46, 0.15);
+      border-color: var(--primary);
+      color: #ffffff;
+      transform: scale(1.06);
+    }
+
+    .student-collapse-icon {
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .student-block.collapsed .student-collapse-icon {
+      transform: rotate(-90deg);
+    }
+
+    .student-body {
+      display: block;
     }
 
     .student-identity {
@@ -995,6 +1060,80 @@
       border: 1px solid rgba(244, 63, 94, 0.4);
     }
 
+    /* Muted Slate Urgency: Past availability cutoff date (no longer accepted) */
+    .missing-item-closed {
+      background: rgba(51, 65, 85, 0.35);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-left: 4px solid #64748b;
+      color: #94a3b8;
+    }
+    .missing-item-closed .missing-title {
+      color: #cbd5e1;
+      font-weight: 500;
+    }
+    .missing-item-closed .assignment-link {
+      color: #94a3b8;
+    }
+    .missing-item-closed .assignment-link:hover {
+      color: #e2e8f0;
+    }
+    .missing-item-closed .missing-due {
+      color: #64748b;
+    }
+    .missing-item-closed .urgency-tag {
+      background: rgba(100, 116, 139, 0.2);
+      color: #94a3b8;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+    }
+
+    /* Flashing animation for availability cutoff under 2 days */
+    @keyframes flashCutoffWarning {
+      0%, 100% {
+        opacity: 1;
+        background: rgba(245, 158, 11, 0.25);
+        color: #fde047;
+        border-color: rgba(245, 158, 11, 0.6);
+        box-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+      }
+      50% {
+        opacity: 0.45;
+        background: rgba(239, 68, 68, 0.2);
+        color: #fca5a5;
+        border-color: rgba(239, 68, 68, 0.5);
+        box-shadow: 0 0 2px rgba(239, 68, 68, 0.2);
+      }
+    }
+
+    .cutoff-expiring-flash {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 1px 7px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      border: 1px solid rgba(245, 158, 11, 0.6);
+      animation: flashCutoffWarning 1.2s ease-in-out infinite;
+      vertical-align: middle;
+    }
+
+    .cutoff-available-text {
+      color: #94a3b8;
+      font-size: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .cutoff-closed-text {
+      color: #94a3b8;
+      font-size: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
     /* Keyframe animation for assignments older than last week (>2 weeks) */
     @keyframes pulseCriticalItem {
       0%, 100% {
@@ -1116,6 +1255,25 @@
       animation: pulseDotAnimation 1.5s ease-in-out infinite;
     }
 
+    .legend-chip.chip-expiring {
+      background: rgba(245, 158, 11, 0.18);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      animation: flashCutoffWarning 1.5s ease-in-out infinite;
+    }
+    .legend-chip.chip-expiring .chip-dot {
+      background: #f59e0b;
+    }
+
+    .legend-chip.chip-closed {
+      background: rgba(71, 85, 105, 0.25);
+      color: #94a3b8;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+    }
+    .legend-chip.chip-closed .chip-dot {
+      background: #64748b;
+    }
+
     .no-missing-banner {
       font-size: 12px;
       color: var(--accent-emerald);
@@ -1165,6 +1323,12 @@
       background: rgba(56, 189, 248, 0.15);
       color: #38bdf8;
       border: 1px solid rgba(56, 189, 248, 0.35);
+    }
+
+    .badge-mini-neutral {
+      background: rgba(100, 116, 139, 0.18);
+      color: #94a3b8;
+      border: 1px solid rgba(100, 116, 139, 0.3);
     }
 
     /* Turned In Late Work Section inside Course Card */
@@ -2130,6 +2294,7 @@
       button,
       .course-grid,
       .student-header,
+      .student-body,
       .comment-bubble-btn,
       .modal-backdrop,
       #commentModal {
@@ -2271,6 +2436,7 @@
       .print-tag-week { color: #854d0e !important; }
       .print-tag-older { color: #b91c1c !important; }
       .print-tag-critical { color: #7f1d1d !important; font-weight: 700 !important; }
+      .print-tag-closed { color: #64748b !important; }
 
       /* Paper Report Course Row */
       .print-course-row {
@@ -2344,6 +2510,7 @@
       .print-group-week .print-group-heading { color: #854d0e !important; }
       .print-group-older .print-group-heading { color: #b91c1c !important; }
       .print-group-critical .print-group-heading { color: #7f1d1d !important; font-weight: 800 !important; }
+      .print-group-closed .print-group-heading { color: #475569 !important; font-weight: 700 !important; }
 
       .print-group-list {
         display: flex !important;
@@ -2369,6 +2536,7 @@
       .print-group-week .print-assign-bullet { color: #d97706 !important; }
       .print-group-older .print-assign-bullet { color: #dc2626 !important; }
       .print-group-critical .print-assign-bullet { color: #991b1b !important; }
+      .print-group-closed .print-assign-bullet { color: #64748b !important; }
 
       .print-assign-name {
         flex-shrink: 0 !important;
@@ -2380,6 +2548,7 @@
       .print-group-week .print-assign-name { color: #713f12 !important; }
       .print-group-older .print-assign-name { color: #7f1d1d !important; }
       .print-group-critical .print-assign-name { color: #450a0a !important; font-weight: 600 !important; }
+      .print-group-closed .print-assign-name { color: #475569 !important; }
 
       .print-assign-dots {
         flex-grow: 1 !important;

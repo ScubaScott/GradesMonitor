@@ -150,6 +150,15 @@
           <input type="checkbox" id="showResolvedToggle" checked onchange="filterDashboard()">
           <span>Show turned-in work</span>
         </label>
+
+        <!-- Toggle all student sections collapsed or expanded -->
+        <button type="button" id="toggleAllStudentsBtn" class="btn btn-secondary no-print" onclick="toggleAllStudents()" style="display:none; padding:4px 10px; font-size:12px; height:28px;" title="Collapse all student sections to headers only">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="7 13 12 18 17 13"></polyline>
+            <polyline points="7 6 12 11 17 6"></polyline>
+          </svg>
+          <span id="toggleAllStudentsText">Collapse All</span>
+        </button>
       </div>
     </section>
 
@@ -161,6 +170,8 @@
         <span class="legend-chip chip-week"><span class="chip-dot"></span>This Week</span>
         <span class="legend-chip chip-older"><span class="chip-dot"></span>Last Week</span>
         <span class="legend-chip chip-pulse"><span class="chip-dot"></span>&gt; 2 Weeks (Pulse)</span>
+        <span class="legend-chip chip-expiring"><span class="chip-dot"></span>Locks &lt; 2 Days (Flash)</span>
+        <span class="legend-chip chip-closed"><span class="chip-dot"></span>Closed / Past Cutoff</span>
       </div>
     </div>
 
@@ -225,12 +236,12 @@
 
   <!-- Footer displaying required version constant -->
   <footer class="dashboard-footer">
-    <span>Canvas Grade Monitor v<span id="versionText">3.0</span> &bull; Synchronized via Local Proxy</span>
+    <span>Canvas Grade Monitor v<span id="versionText">3.3</span> &bull; Synchronized via Local Proxy</span>
   </footer>
 
   <script>
     // Version constant for frontend display and verification
-    const VERSION = "3.0";
+    const VERSION = "3.3";
     document.getElementById('versionText').innerText = VERSION;
 
     // Cache of dashboard data for fast client-side filtering
@@ -330,14 +341,84 @@
       }
     });
 
-    // Determine missing assignment urgency category: Today (green), This Week (yellow), Last Week (red), and >2 Weeks (red + pulse)
-    function getMissingUrgency(rawDueAt) {
+    // Calculate assignment availability window, lock countdown, and past-cutoff status
+    function getAvailabilityInfo(rawLockAt, rawUnlockAt, lockedForUser = false) {
+      const now = new Date();
+      let isPastCutoff = Boolean(lockedForUser);
+      let isExpiringSoon = false;
+      let msUntilLock = null;
+      let timeRemainingText = '';
+      let lockAtText = '';
+      let unlockAtText = '';
+
+      if (rawLockAt) {
+        const lockDate = new Date(rawLockAt);
+        if (!isNaN(lockDate.getTime())) {
+          lockAtText = formatDateTime(rawLockAt);
+          if (lockDate <= now) {
+            isPastCutoff = true;
+          } else {
+            msUntilLock = lockDate.getTime() - now.getTime();
+            // Flag availability window expiring within 2 days (48 hours)
+            if (msUntilLock > 0 && msUntilLock < (2 * 24 * 60 * 60 * 1000)) {
+              isExpiringSoon = true;
+              const totalHours = Math.floor(msUntilLock / (1000 * 60 * 60));
+              if (totalHours < 1) {
+                const mins = Math.max(1, Math.floor(msUntilLock / (1000 * 60)));
+                timeRemainingText = `${mins}m left`;
+              } else if (totalHours < 24) {
+                timeRemainingText = `${totalHours}h left`;
+              } else {
+                const days = Math.floor(totalHours / 24);
+                const remHours = totalHours % 24;
+                timeRemainingText = `${days}d ${remHours}h left`;
+              }
+            }
+          }
+        }
+      }
+
+      if (rawUnlockAt) {
+        const unlockDate = new Date(rawUnlockAt);
+        if (!isNaN(unlockDate.getTime())) {
+          unlockAtText = formatDateTime(rawUnlockAt);
+        }
+      }
+
+      return {
+        isPastCutoff,
+        isExpiringSoon,
+        msUntilLock,
+        timeRemainingText,
+        lockAtText,
+        unlockAtText,
+        rawLockAt,
+        rawUnlockAt,
+        lockedForUser
+      };
+    }
+
+    // Determine missing assignment urgency category: Today (green), This Week (yellow), Last Week (red), >2 Weeks (red + pulse), or Past Cutoff (muted slate)
+    function getMissingUrgency(rawDueAt, item = null) {
+      // If assignment has an availability cutoff that has already passed, categorize as closed
+      if (item && item.isPastCutoff) {
+        return {
+          urgency: 'closed',
+          itemClass: 'missing-item-closed',
+          tagHtml: '&#128274; Past Cutoff',
+          isPastCutoff: true,
+          isPulse: false
+        };
+      }
+
       // Overdue fallback for assignments with no specified or unparseable due date
       if (!rawDueAt) {
         return {
           urgency: 'critical',
           itemClass: 'missing-item-older missing-item-pulse',
-          tagHtml: '<span class="pulse-indicator"></span>&gt; 2 Weeks'
+          tagHtml: '<span class="pulse-indicator"></span>&gt; 2 Weeks',
+          isPastCutoff: false,
+          isPulse: true
         };
       }
 
@@ -346,7 +427,9 @@
         return {
           urgency: 'critical',
           itemClass: 'missing-item-older missing-item-pulse',
-          tagHtml: '<span class="pulse-indicator"></span>&gt; 2 Weeks'
+          tagHtml: '<span class="pulse-indicator"></span>&gt; 2 Weeks',
+          isPastCutoff: false,
+          isPulse: true
         };
       }
 
@@ -371,7 +454,9 @@
         return {
           urgency: 'today',
           itemClass: 'missing-item-today',
-          tagHtml: 'Today'
+          tagHtml: 'Today',
+          isPastCutoff: false,
+          isPulse: false
         };
       }
 
@@ -380,7 +465,9 @@
         return {
           urgency: 'week',
           itemClass: 'missing-item-week',
-          tagHtml: 'This Week'
+          tagHtml: 'This Week',
+          isPastCutoff: false,
+          isPulse: false
         };
       }
 
@@ -389,7 +476,9 @@
         return {
           urgency: 'lastWeek',
           itemClass: 'missing-item-older',
-          tagHtml: 'Last Week'
+          tagHtml: 'Last Week',
+          isPastCutoff: false,
+          isPulse: false
         };
       }
 
@@ -397,7 +486,9 @@
       return {
         urgency: 'critical',
         itemClass: 'missing-item-older missing-item-pulse',
-        tagHtml: '<span class="pulse-indicator"></span>&gt; 2 Weeks'
+        tagHtml: '<span class="pulse-indicator"></span>&gt; 2 Weeks',
+        isPastCutoff: false,
+        isPulse: true
       };
     }
 
@@ -553,6 +644,169 @@
         container.style.display = 'none';
         const hiddenCount = container.children.length;
         btn.innerText = `Show ${hiddenCount} more turned-in items...`;
+      }
+    }
+
+    // Retrieve effective timestamp in milliseconds for turned-in assignment sorting
+    function getTurnedInTimestamp(item) {
+      if (item.rawTurnedInAt) {
+        const t = new Date(item.rawTurnedInAt).getTime();
+        if (!isNaN(t) && t > 0) return t;
+      }
+      if (item.rawSubmittedAt) {
+        const t = new Date(item.rawSubmittedAt).getTime();
+        if (!isNaN(t) && t > 0) return t;
+      }
+      if (item.gradedAt) {
+        const t = new Date(item.gradedAt).getTime();
+        if (!isNaN(t) && t > 0) return t;
+      }
+      if (item.resolvedAt) {
+        const t = new Date(item.resolvedAt).getTime();
+        if (!isNaN(t) && t > 0) return t;
+      }
+      if (item.rawDueAt) {
+        const t = new Date(item.rawDueAt).getTime();
+        if (!isNaN(t) && t > 0) return t;
+      }
+      return 0;
+    }
+
+    // Sort turned-in items descending from most recently turned in to oldest so the most recent is on top
+    function sortTurnedInAssignmentsDescending(items) {
+      if (!Array.isArray(items)) return [];
+      return items.sort((a, b) => {
+        const timeA = getTurnedInTimestamp(a);
+        const timeB = getTurnedInTimestamp(b);
+        if (timeB !== timeA) {
+          return timeB - timeA;
+        }
+        return (a.name || '').localeCompare(b.name || '');
+      });
+    }
+
+    // Sort missing assignments descending from newest due date to oldest so most recent is on top
+    function sortMissingAssignmentsDescending(items) {
+      if (!Array.isArray(items)) return [];
+      return items.sort((a, b) => {
+        const timeA = a.rawDueAt ? new Date(a.rawDueAt).getTime() : 0;
+        const timeB = b.rawDueAt ? new Date(b.rawDueAt).getTime() : 0;
+        if (timeB !== timeA) {
+          return timeB - timeA;
+        }
+        return (a.name || '').localeCompare(b.name || '');
+      });
+    }
+
+    // Storage key for persistent collapsed student sections
+    const COLLAPSED_STUDENTS_STORAGE_KEY = 'canvas_collapsed_students_v1';
+
+    // Retrieve map of collapsed student IDs from persistent local storage
+    function getCollapsedStudents() {
+      try {
+        const raw = localStorage.getItem(COLLAPSED_STUDENTS_STORAGE_KEY);
+        return raw ? JSON.parse(raw) : {};
+      } catch (e) {
+        return {};
+      }
+    }
+
+    // Persist collapsed student state in browser storage
+    function setStudentCollapsedState(studentId, isCollapsed) {
+      const map = getCollapsedStudents();
+      if (isCollapsed) {
+        map[studentId] = true;
+      } else {
+        delete map[studentId];
+      }
+      try {
+        localStorage.setItem(COLLAPSED_STUDENTS_STORAGE_KEY, JSON.stringify(map));
+      } catch (e) {}
+    }
+
+    // Toggle collapsed state for an individual student block
+    function toggleStudentCollapse(studentId, event) {
+      if (event) {
+        const target = event.target;
+        if (target.closest('button') && !target.closest('.student-collapse-btn')) {
+          return;
+        }
+      }
+
+      const section = document.querySelector(`.student-block[data-student-id="${studentId}"]`);
+      if (!section) return;
+
+      const isCollapsed = section.classList.toggle('collapsed');
+      setStudentCollapsedState(studentId, isCollapsed);
+
+      const header = section.querySelector('.student-header');
+      if (header) {
+        header.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+      }
+
+      const btn = section.querySelector('.student-collapse-btn');
+      if (btn) {
+        btn.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+        btn.setAttribute('title', isCollapsed ? 'Expand student section' : 'Collapse student section');
+      }
+
+      updateToggleAllButtonState();
+    }
+
+    // Keyboard handler for accessible header toggle
+    function handleStudentHeaderKeydown(studentId, event) {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        toggleStudentCollapse(studentId, event);
+      }
+    }
+
+    // Toggle collapsed state for all visible student blocks simultaneously
+    function toggleAllStudents() {
+      const sections = Array.from(document.querySelectorAll('.student-block'));
+      if (sections.length === 0) return;
+
+      const anyExpanded = sections.some(s => !s.classList.contains('collapsed'));
+      const shouldCollapse = anyExpanded;
+
+      sections.forEach(section => {
+        const studentId = section.dataset.studentId;
+        section.classList.toggle('collapsed', shouldCollapse);
+        if (studentId) {
+          setStudentCollapsedState(studentId, shouldCollapse);
+        }
+        const header = section.querySelector('.student-header');
+        if (header) header.setAttribute('aria-expanded', shouldCollapse ? 'false' : 'true');
+        const btn = section.querySelector('.student-collapse-btn');
+        if (btn) {
+          btn.setAttribute('aria-expanded', shouldCollapse ? 'false' : 'true');
+          btn.setAttribute('title', shouldCollapse ? 'Expand student section' : 'Collapse student section');
+        }
+      });
+
+      updateToggleAllButtonState();
+    }
+
+    // Update the label and icon of the toggle all button based on current student state
+    function updateToggleAllButtonState() {
+      const btn = document.getElementById('toggleAllStudentsBtn');
+      const textEl = document.getElementById('toggleAllStudentsText');
+      if (!btn || !textEl) return;
+
+      const sections = Array.from(document.querySelectorAll('.student-block'));
+      if (sections.length === 0) {
+        btn.style.display = 'none';
+        return;
+      }
+      btn.style.display = 'inline-flex';
+
+      const allCollapsed = sections.length > 0 && sections.every(s => s.classList.contains('collapsed'));
+      if (allCollapsed) {
+        textEl.innerText = 'Expand All';
+        btn.setAttribute('title', 'Expand all student sections');
+      } else {
+        textEl.innerText = 'Collapse All';
+        btn.setAttribute('title', 'Collapse all student sections to headers only');
       }
     }
 
@@ -774,7 +1028,10 @@
         const historyKey = `${student.id}_${course.id}_${s.assignment_id}`;
         const rawDueAt = s.assignment ? s.assignment.due_at : null;
         const rawSubAt = s.submitted_at;
-        const isLateByDate = Boolean(rawDueAt && rawSubAt && new Date(rawSubAt) > new Date(rawDueAt));
+        const historyResolvedAt = (overdueHistory[historyKey] && overdueHistory[historyKey].resolvedAt) || null;
+        const gradedAt = s.graded_at || null;
+        const effectiveTurnedInAt = rawSubAt || historyResolvedAt || gradedAt || null;
+        const isLateByDate = Boolean(rawDueAt && effectiveTurnedInAt && new Date(effectiveTurnedInAt) > new Date(rawDueAt));
         const wasTrackedMissing = Boolean(overdueHistory[historyKey] && overdueHistory[historyKey].status === 'missing');
 
         // Determine if submission is marked as turned in or graded
@@ -788,10 +1045,10 @@
 
           if (wasTrackedMissing && overdueHistory[historyKey]) {
             overdueHistory[historyKey].status = 'resolved';
-            overdueHistory[historyKey].resolvedAt = rawSubAt || new Date().toISOString();
+            overdueHistory[historyKey].resolvedAt = effectiveTurnedInAt || new Date().toISOString();
           }
 
-          const lateness = getLatenessInfo(rawDueAt, rawSubAt, isLate);
+          const lateness = getLatenessInfo(rawDueAt, effectiveTurnedInAt, isLate);
 
           // Extract submission comments and isolate teacher feedback
           const rawComments = Array.isArray(s.submission_comments) ? s.submission_comments : [];
@@ -814,8 +1071,11 @@
             htmlUrl: (s.assignment && s.assignment.html_url) ? s.assignment.html_url : (s.html_url || null),
             dueAt: rawDueAt ? new Date(rawDueAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'No due date',
             rawDueAt: rawDueAt,
-            submittedAt: rawSubAt ? formatDateTime(rawSubAt) : (s.workflow_state === 'graded' ? 'Graded' : 'Turned In'),
+            submittedAt: effectiveTurnedInAt ? formatDateTime(effectiveTurnedInAt) : (s.workflow_state === 'graded' ? 'Graded' : 'Turned In'),
             rawSubmittedAt: rawSubAt,
+            rawTurnedInAt: effectiveTurnedInAt,
+            gradedAt: gradedAt,
+            resolvedAt: historyResolvedAt,
             daysLateText: lateness.daysLateText,
             isLate: isLate,
             lateness: lateness,
@@ -830,12 +1090,8 @@
         }
       }
 
-      // Sort turned-in items descending by submission timestamp so newest completions are first
-      resolvedItems.sort((a, b) => {
-        const timeA = a.rawSubmittedAt ? new Date(a.rawSubmittedAt).getTime() : (a.rawDueAt ? new Date(a.rawDueAt).getTime() : 0);
-        const timeB = b.rawSubmittedAt ? new Date(b.rawSubmittedAt).getTime() : (b.rawDueAt ? new Date(b.rawDueAt).getTime() : 0);
-        return timeB - timeA;
-      });
+      // Sort turned-in items descending from most recently turned in to oldest so the most recent is on top
+      sortTurnedInAssignmentsDescending(resolvedItems);
 
       course.resolvedLateWork = resolvedItems;
     }
@@ -1097,6 +1353,12 @@
                   const cId = item.course_id;
                   if (!missingByCourse[cId]) missingByCourse[cId] = [];
 
+                  // Extract assignment availability window and user lock flags
+                  const rawLockAt = item.lock_at || null;
+                  const rawUnlockAt = item.unlock_at || null;
+                  const lockedForUser = Boolean(item.locked_for_user);
+                  const avail = getAvailabilityInfo(rawLockAt, rawUnlockAt, lockedForUser);
+
                   missingByCourse[cId].push({
                     id: item.id,
                     courseId: cId,
@@ -1105,7 +1367,15 @@
                     dueAt: item.due_at ? new Date(item.due_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'No due date',
                     rawDueAt: item.due_at || null,
                     pointsPossible: item.points_possible,
-                    submissionTypes: item.submission_types || []
+                    submissionTypes: item.submission_types || [],
+                    rawLockAt: rawLockAt,
+                    rawUnlockAt: rawUnlockAt,
+                    lockedForUser: lockedForUser,
+                    isPastCutoff: avail.isPastCutoff,
+                    isExpiringSoon: avail.isExpiringSoon,
+                    timeRemainingText: avail.timeRemainingText,
+                    lockAtText: avail.lockAtText,
+                    unlockAtText: avail.unlockAtText
                   });
                 }
               }
@@ -1136,6 +1406,8 @@
           // Attach missing work and resolved late work to each course
           for (const course of courses) {
             const currentMissing = missingByCourse[course.id] || [];
+            // Sort missing assignments descending so newest due date is on top
+            sortMissingAssignmentsDescending(currentMissing);
             let newMissingCount = 0;
 
             for (const m of currentMissing) {
@@ -1143,7 +1415,9 @@
               const prevRecord = overdueHistory[historyKey];
               if (!prevRecord) {
                 m.isNew = true;
-                newMissingCount++;
+                if (!m.isPastCutoff) {
+                  newMissingCount++;
+                }
                 overdueHistory[historyKey] = {
                   studentId: student.id,
                   courseId: course.id,
@@ -1152,6 +1426,8 @@
                   htmlUrl: m.htmlUrl || null,
                   dueAt: m.dueAt,
                   rawDueAt: m.rawDueAt,
+                  rawLockAt: m.rawLockAt || null,
+                  isPastCutoff: m.isPastCutoff,
                   firstSeenMissing: new Date().toISOString(),
                   lastSeenMissing: new Date().toISOString(),
                   status: 'missing'
@@ -1161,6 +1437,8 @@
                 prevRecord.lastSeenMissing = new Date().toISOString();
                 prevRecord.status = 'missing';
                 if (m.htmlUrl) prevRecord.htmlUrl = m.htmlUrl;
+                if (m.rawLockAt) prevRecord.rawLockAt = m.rawLockAt;
+                prevRecord.isPastCutoff = m.isPastCutoff;
               }
             }
 
@@ -1275,6 +1553,7 @@
       let totalStudents = cachedStudentsData.length;
       let displayedClassesCount = 0;
       let totalMissingCount = 0;
+      let totalClosedCount = 0;
       let totalResolvedCount = 0;
 
       output.innerHTML = '';
@@ -1298,8 +1577,8 @@
             }
           }
 
-          // Filter 3: Missing work only filter
-          if (missingOnly && course.missingWork.length === 0) {
+          // Filter 3: Missing work only filter (matches courses with outstanding actionable missing work)
+          if (missingOnly && (course.missingWork || []).filter(m => !m.isPastCutoff).length === 0) {
             return false;
           }
 
@@ -1321,10 +1600,13 @@
         }
 
         displayedClassesCount += filteredCourses.length;
-        const studentMissing = filteredCourses.reduce((acc, c) => acc + c.missingWork.length, 0);
+        // Count only actionable missing assignments towards the student outstanding missing counter
+        const studentMissing = filteredCourses.reduce((acc, c) => acc + (c.missingWork ? c.missingWork.filter(m => !m.isPastCutoff).length : 0), 0);
+        const studentClosed = filteredCourses.reduce((acc, c) => acc + (c.missingWork ? c.missingWork.filter(m => m.isPastCutoff).length : 0), 0);
         const studentResolved = filteredCourses.reduce((acc, c) => acc + (c.resolvedLateWork ? c.resolvedLateWork.length : 0), 0);
         const studentLate = filteredCourses.reduce((acc, c) => acc + (c.resolvedLateWork ? c.resolvedLateWork.filter(r => r.isLate).length : 0), 0);
         totalMissingCount += studentMissing;
+        totalClosedCount += studentClosed;
         totalResolvedCount += studentResolved;
 
         const studentSection = document.createElement('section');
@@ -1332,6 +1614,12 @@
         // Add marker class if student has zero courses matching active filters
         if (filteredCourses.length === 0) {
           studentSection.classList.add('has-no-courses');
+        }
+        // Check if student section is currently marked collapsed in storage
+        const collapsedMap = getCollapsedStudents();
+        const isCollapsed = Boolean(collapsedMap[student.id]);
+        if (isCollapsed) {
+          studentSection.classList.add('collapsed');
         }
 
         // Student avatar initials
@@ -1348,7 +1636,7 @@
           } else if (activeOnly) {
             emptyMessage = 'No active classes found for this student. Uncheck "Active classes only" to view past/concluded courses.';
           } else if (missingOnly) {
-            emptyMessage = 'No classes currently have missing assignments.';
+            emptyMessage = 'No classes currently have outstanding missing assignments.';
           }
 
           coursesCardsHtml = `
@@ -1361,30 +1649,69 @@
             const gradeInfo = getGradeDetails(course.grade, course.score);
             const courseUrl = buildCanvasCourseUrl(course.id);
 
+            // Sort missing assignments descending from newest due date to oldest so most recent is on top
+            course.missingWork = sortMissingAssignmentsDescending(course.missingWork || []);
+
+            // Sort turned-in work descending from most recently turned in to oldest so most recent is on top
+            course.resolvedLateWork = sortTurnedInAssignmentsDescending(course.resolvedLateWork || []);
+
+            // Filter missing assignments for display: hide past cutoff items when 'Only with missing work' is enabled
+            const displayedMissingWork = missingOnly
+              ? (course.missingWork || []).filter(m => !m.isPastCutoff)
+              : (course.missingWork || []);
+
+            // Calculate actionable vs closed past-cutoff counts
+            const outstandingCount = (course.missingWork || []).filter(m => !m.isPastCutoff).length;
+            const closedCount = (course.missingWork || []).filter(m => m.isPastCutoff).length;
+
             let missingWorkHtml = '';
-            if (course.missingWork.length > 0) {
-              const listItems = course.missingWork.map(m => {
-                const urgency = getMissingUrgency(m.rawDueAt);
+            if (displayedMissingWork.length > 0) {
+              const listItems = displayedMissingWork.map(m => {
+                const urgency = getMissingUrgency(m.rawDueAt, m);
                 const isPaper = m.submissionTypes && m.submissionTypes.length > 0 && m.submissionTypes.every(t => ['on_paper', 'none'].includes(t));
                 const assignUrl = buildCanvasAssignmentUrl(course.id, m.id, m.htmlUrl);
+
+                // Build availability badge with flashing animation when cutoff is under 2 days away
+                let availabilityBadgeHtml = '';
+                if (m.isPastCutoff) {
+                  availabilityBadgeHtml = ` &bull; <span class="cutoff-closed-text">&#128274; Closed: Available until ${m.lockAtText || m.dueAt} (No longer accepted)</span>`;
+                } else if (m.rawLockAt) {
+                  if (m.isExpiringSoon) {
+                    availabilityBadgeHtml = ` &bull; <span class="cutoff-expiring-flash" title="This assignment locks in ${m.timeRemainingText}!">&#9203; Available until: ${m.lockAtText} (${m.timeRemainingText})</span>`;
+                  } else {
+                    availabilityBadgeHtml = ` &bull; <span class="cutoff-available-text">&#9203; Available until: ${m.lockAtText}</span>`;
+                  }
+                }
+
                 return `
                   <li class="missing-item ${urgency.itemClass}">
                     <div class="missing-item-header">
                       <span class="missing-title">
-                        <a href="${assignUrl}" target="_blank" rel="noopener noreferrer" class="assignment-link" title="Open assignment in Canvas (opens in new tab)">&bull; ${escapeHtml(m.name)}<svg class="external-link-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>${m.isNew ? ' <span class="badge-mini badge-mini-new" style="margin-left:4px; font-size:9.5px; padding:1px 6px;">New Late</span>' : ''}${isPaper ? ' <span class="badge-mini" style="margin-left:4px; font-size:9.5px; padding:1px 6px; background:rgba(245,158,11,0.15); color:#fbbf24; border:1px solid rgba(245,158,11,0.3); border-radius:4px;">Paper Assignment</span>' : ''}
+                        <a href="${assignUrl}" target="_blank" rel="noopener noreferrer" class="assignment-link" title="Open assignment in Canvas (opens in new tab)">&bull; ${escapeHtml(m.name)}<svg class="external-link-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg></a>${m.isNew && !m.isPastCutoff ? ' <span class="badge-mini badge-mini-new" style="margin-left:4px; font-size:9.5px; padding:1px 6px;">New Late</span>' : ''}${isPaper ? ' <span class="badge-mini" style="margin-left:4px; font-size:9.5px; padding:1px 6px; background:rgba(245,158,11,0.15); color:#fbbf24; border:1px solid rgba(245,158,11,0.3); border-radius:4px;">Paper Assignment</span>' : ''}
                       </span>
                       <span class="urgency-tag">${urgency.tagHtml}</span>
                     </div>
-                    <span class="missing-due">Due: ${m.dueAt}${m.pointsPossible ? ` &bull; ${m.pointsPossible} pts` : ''}</span>
+                    <span class="missing-due">Due: ${m.dueAt}${m.pointsPossible ? ` &bull; ${m.pointsPossible} pts` : ''}${availabilityBadgeHtml}</span>
                   </li>
                 `;
               }).join('');
+
+              let headerBadgeText = `${outstandingCount}`;
+              let headerBadgeClass = 'missing-count-badge';
+              if (missingOnly) {
+                headerBadgeText = `${outstandingCount}`;
+              } else if (outstandingCount === 0 && closedCount > 0) {
+                headerBadgeText = `${closedCount} Closed`;
+                headerBadgeClass = 'missing-count-badge badge-mini-neutral';
+              } else if (outstandingCount > 0 && closedCount > 0) {
+                headerBadgeText = `${outstandingCount} (${closedCount} Closed)`;
+              }
 
               missingWorkHtml = `
                 <div class="missing-work-container">
                   <div class="missing-work-header">
                     <span>Missing Assignments</span>
-                    <span class="missing-count-badge">${course.missingWork.length}</span>
+                    <span class="${headerBadgeClass}">${headerBadgeText}</span>
                   </div>
                   <ul class="missing-list">
                     ${listItems}
@@ -1490,7 +1817,12 @@
                     </h3>
                     <div class="course-code">${course.courseCode || `ID: ${course.id}`}</div>
                     <div class="course-badges-row">
-                      ${course.missingWork.length > 0 ? `<span class="badge-mini badge-mini-warn">${course.missingWork.length} Overdue</span>` : `<span class="badge-mini badge-mini-success">0 Overdue</span>`}
+                      ${outstandingCount > 0 
+                        ? `<span class="badge-mini badge-mini-warn">${outstandingCount} Overdue</span>` 
+                        : (closedCount > 0 
+                            ? `<span class="badge-mini badge-mini-neutral">${closedCount} Past Cutoff</span>` 
+                            : `<span class="badge-mini badge-mini-success">0 Overdue</span>`)}
+                      ${outstandingCount > 0 && closedCount > 0 ? `<span class="badge-mini badge-mini-neutral">${closedCount} Past Cutoff</span>` : ''}
                       ${course.resolvedLateWork && course.resolvedLateWork.length > 0 ? `<span class="badge-mini badge-mini-success">&#10003; ${course.resolvedLateWork.length} Turned In</span>` : ''}
                       ${course.newMissingCount > 0 ? `<span class="badge-mini badge-mini-new">+${course.newMissingCount} New Late</span>` : ''}
                     </div>
@@ -1519,17 +1851,25 @@
           printCoursesHtml = filteredCourses.map(course => {
             const gradeInfo = getGradeDetails(course.grade, course.score);
 
-            // Group missing assignments by age category
+            // Filter missing assignments for print layout: hide past cutoff items when 'Only with missing work' is enabled
+            const printMissingWork = missingOnly
+              ? (course.missingWork || []).filter(m => !m.isPastCutoff)
+              : (course.missingWork || []);
+
+            // Group missing assignments by age category and cutoff state
             const groups = {
               today: [],
               week: [],
               lastWeek: [],
-              critical: []
+              critical: [],
+              closed: []
             };
 
-            for (const m of course.missingWork) {
-              const urgency = getMissingUrgency(m.rawDueAt);
-              if (urgency.urgency === 'today') {
+            for (const m of printMissingWork) {
+              const urgency = getMissingUrgency(m.rawDueAt, m);
+              if (m.isPastCutoff) {
+                groups.closed.push(m);
+              } else if (urgency.urgency === 'today') {
                 groups.today.push(m);
               } else if (urgency.urgency === 'week') {
                 groups.week.push(m);
@@ -1541,7 +1881,7 @@
             }
 
             let printMissingGroupsHtml = '';
-            if (course.missingWork.length > 0) {
+            if (printMissingWork.length > 0) {
               const groupSections = [];
 
               if (groups.today.length > 0) {
@@ -1609,6 +1949,24 @@
                           <span class="print-assign-name">${m.name}</span>
                           <span class="print-assign-dots"></span>
                           <span class="print-assign-due">Due: ${m.dueAt}${m.pointsPossible ? ` &bull; ${m.pointsPossible} pts` : ''}</span>
+                        </div>
+                      `).join('')}
+                    </div>
+                  </div>
+                `);
+              }
+
+              if (groups.closed.length > 0) {
+                groupSections.push(`
+                  <div class="print-age-group print-group-closed">
+                    <div class="print-group-heading">Past Cutoff / Closed (${groups.closed.length})</div>
+                    <div class="print-group-list">
+                      ${groups.closed.map(m => `
+                        <div class="print-assignment-line">
+                          <span class="print-assign-bullet">&bull;</span>
+                          <span class="print-assign-name">${m.name}</span>
+                          <span class="print-assign-dots"></span>
+                          <span class="print-assign-due">Due: ${m.dueAt} &bull; Closed: ${m.lockAtText || m.dueAt}</span>
                         </div>
                       `).join('')}
                     </div>
@@ -1685,7 +2043,7 @@
                 <div class="print-student-sub">Academic Progress &amp; Missing Work Report &bull; Student ID: ${student.id}</div>
               </div>
               <div class="print-report-badge ${studentMissing > 0 ? 'badge-warn' : 'badge-ok'}">
-                ${studentMissing > 0 ? `${studentMissing} MISSING ASSIGNMENT${studentMissing > 1 ? 'S' : ''}` : 'ALL WORK CAUGHT UP'}
+                ${studentMissing > 0 ? `${studentMissing} OUTSTANDING MISSING${studentClosed > 0 && !missingOnly ? ` (+${studentClosed} CLOSED)` : ''}` : (studentClosed > 0 && !missingOnly ? `${studentClosed} CLOSED &bull; 0 OUTSTANDING` : 'ALL WORK CAUGHT UP')}
               </div>
             </div>
             <div class="print-report-meta">
@@ -1701,11 +2059,12 @@
               <span class="print-legend-tag print-tag-week">&bull; Due This Week</span>
               <span class="print-legend-tag print-tag-older">&bull; Due Last Week</span>
               <span class="print-legend-tag print-tag-critical">&bull; &gt; 2 Weeks Ago</span>
+              ${!missingOnly ? '<span class="print-legend-tag print-tag-closed">&bull; Past Cutoff / Closed</span>' : ''}
               ${showResolved ? '<span class="print-legend-tag" style="color: #166534 !important;">&bull; &#10003; Turned In Work</span>' : ''}
             </div>
           </div>
 
-          <div class="student-header">
+          <div class="student-header" onclick="toggleStudentCollapse('${student.id}', event)" title="Click to collapse or expand student section" role="button" tabindex="0" aria-expanded="${isCollapsed ? 'false' : 'true'}" onkeydown="handleStudentHeaderKeydown('${student.id}', event)">
             <div class="student-identity">
               <div class="student-avatar">${initials}</div>
               <div>
@@ -1716,7 +2075,7 @@
               </div>
             </div>
             <div class="student-badges">
-              <button class="btn btn-secondary no-print" style="padding: 5px 12px; font-size: 12px; border-radius: 9999px;" onclick="printStudentReport(${student.id})" title="Print 1-page report for this student only">
+              <button class="btn btn-secondary no-print" style="padding: 5px 12px; font-size: 12px; border-radius: 9999px;" onclick="event.stopPropagation(); printStudentReport(${student.id})" title="Print 1-page report for this student only">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="6 9 6 2 18 2 18 9"></polyline>
                   <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
@@ -1724,7 +2083,7 @@
                 </svg>
                 Print Student Report
               </button>
-              <div class="stat-square ${studentMissing > 0 ? 'stat-square-missing-alert' : 'stat-square-missing-ok'}" title="${studentMissing} missing assignment(s)">
+              <div class="stat-square ${studentMissing > 0 ? 'stat-square-missing-alert' : 'stat-square-missing-ok'}" title="${studentMissing} actionable missing assignment(s)${studentClosed > 0 && !missingOnly ? ` (${studentClosed} past cutoff / closed)` : ''}">
                 <span class="stat-square-num">${studentMissing}</span>
                 <span class="stat-square-label">MISSING</span>
               </div>
@@ -1732,15 +2091,23 @@
                 <span class="stat-square-num">${studentLate}</span>
                 <span class="stat-square-label">LATE</span>
               </div>
+              <button type="button" class="student-collapse-btn no-print" onclick="event.stopPropagation(); toggleStudentCollapse('${student.id}', event)" aria-expanded="${isCollapsed ? 'false' : 'true'}" title="${isCollapsed ? 'Expand student section' : 'Collapse student section'}" aria-label="Toggle student collapse">
+                <svg class="student-collapse-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
             </div>
           </div>
 
-          <!-- 30-Day Throughput and Backlog Burn Chart (Option C: Burn Piles + Trendline) -->
-          <div id="throughputContainer_${student.id}" class="student-throughput-card"></div>
+          <!-- Collapsible content containing chart and courses -->
+          <div id="studentBody_${student.id}" class="student-body">
+            <!-- 30-Day Throughput and Backlog Burn Chart (Option C: Burn Piles + Trendline) -->
+            <div id="throughputContainer_${student.id}" class="student-throughput-card"></div>
 
-          <!-- Interactive Screen Grid View -->
-          <div class="course-grid">
-            ${coursesCardsHtml}
+            <!-- Interactive Screen Grid View -->
+            <div class="course-grid">
+              ${coursesCardsHtml}
+            </div>
           </div>
 
           <!-- Paper Report View (Optimized for horizontal space and compact vertical printing) -->
@@ -1755,12 +2122,18 @@
         updateStudentThroughputCard(student.id);
       }
 
+      // Update toggle all student sections button visibility and text
+      updateToggleAllButtonState();
+
       // Update aggregate metrics display
       document.getElementById('metricStudents').innerText = totalStudents;
       document.getElementById('metricClasses').innerText = displayedClassesCount;
 
       const metricMissingEl = document.getElementById('metricMissing');
       metricMissingEl.innerText = totalMissingCount;
+      metricMissingEl.title = (totalClosedCount > 0 && !missingOnly)
+        ? `${totalMissingCount} outstanding missing (${totalClosedCount} past availability cutoff)`
+        : `${totalMissingCount} missing assignments`;
       if (totalMissingCount > 0) {
         metricMissingEl.className = 'metric-value highlight-warn';
       } else {
@@ -2073,6 +2446,11 @@
         // Collect missing assignments from course
         const missing = course.missingWork || [];
         for (const m of missing) {
+          // Exclude assignments past cutoff date since they can no longer be submitted
+          if (m.isPastCutoff) {
+            continue;
+          }
+
           const subTypes = m.submissionTypes || [];
           // Filter out assignments that will never be turned in online
           if (!canBeSubmittedOnline(subTypes, false)) {
@@ -2279,7 +2657,7 @@
       }
 
       // Flag when the reconstructed count disagrees with Canvas's own missing list
-      const canvasMissingCount = targetCourses.reduce((acc, c) => acc + (c.missingWork ? c.missingWork.length : 0), 0);
+      const canvasMissingCount = targetCourses.reduce((acc, c) => acc + (c.missingWork ? c.missingWork.filter(m => !m.isPastCutoff).length : 0), 0);
       const missingMismatchNote = currentMissing !== canvasMissingCount
         ? `Chart counts ${currentMissing} missing today, but Canvas reports ${canvasMissingCount}.`
         : '';

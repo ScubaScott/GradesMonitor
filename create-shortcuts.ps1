@@ -1,5 +1,5 @@
 # Version identifier for Grade Monitor shortcut creation tool
-$VERSION = "3.0"
+$VERSION = "3.1"
 
 # Create COM shell object for creating Windows .lnk shortcuts
 $wsh = New-Object -ComObject WScript.Shell
